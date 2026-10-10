@@ -532,12 +532,15 @@ function ReadingCalendar({ days, readingDays = [], books = [] }) {
   )
 }
 
+const FINISHED_PER_PAGE = 5
+
 function Finished({ list, titles }) {
+  const [shown, setShown] = useState(FINISHED_PER_PAGE)
   if (!list.length) return null
   return (
     <Card className="mt-4 divide-y divide-stone-100 px-4">
       <h2 className="py-3 font-display text-lg font-semibold text-stone-900">Finished</h2>
-      {list.map((b) => (
+      {list.slice(0, shown).map((b) => (
         <a key={b.document} href={`#/book/${b.document}`} className="flex items-baseline justify-between gap-3 py-2.5">
           <span className="truncate text-sm font-medium text-stone-800">{titles.get(b.document) ?? b.document}</span>
           <span className="shrink-0 font-mono text-xs text-stone-500">
@@ -545,6 +548,15 @@ function Finished({ list, titles }) {
           </span>
         </a>
       ))}
+      {list.length > shown && (
+        <button
+          type="button"
+          onClick={() => setShown(shown + FINISHED_PER_PAGE)}
+          className="w-full py-3 text-sm font-semibold text-brand-600"
+        >
+          Show more ({list.length - shown})
+        </button>
+      )}
     </Card>
   )
 }
