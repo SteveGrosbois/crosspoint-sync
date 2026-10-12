@@ -248,47 +248,43 @@ async function resolveCfi(
 }
 
 /**
- * Pull listening-position changes for bidirectional sync: read the user's media
- * progress and emit anything updated since the cursor. ABS derives `progress`
- * from currentTime/duration, so it maps straight back to a reading percentage.
+ * Pull this book's ABS position when a device asks for progress (and match it on
+ * demand), so opening a book you've been listening to jumps to the audiobook's
+ * spot before the device's older position is pushed over it. ABS derives
+ * `progress` from currentTime/duration, so it maps straight back to a reading
+ * percentage.
  */
-async function pullChanges(cred: Credential, http: HttpTransport, sinceMs: number): Promise<InboundChange[]> {
+async function pullProgress(
+  cred: Credential, m: Match, http: HttpTransport, sinceMs: number
+): Promise<InboundChange | null> {
   const c = parseCred(cred);
-  if (!c) return [];
-  const r = await absGet(http, c, '/api/me');
-  const mp = Array.isArray(r.body?.mediaProgress) ? r.body.mediaProgress : [];
-  const out: InboundChange[] = [];
-  for (const p of mp) {
-    if (p?.episodeId) continue; // books only, not podcast episodes
-    const lu = typeof p?.lastUpdate === 'number' ? p.lastUpdate : 0;
-    if (lu <= sinceMs) continue;
-    if (p?.libraryItemId == null) continue;
-    const externalId = String(p.libraryItemId);
-    const hasAudio = typeof p?.duration === 'number' && p.duration > 0;
-    let pct = typeof p?.progress === 'number' ? p.progress : 0;
-    if (!pct && hasAudio && typeof p?.currentTime === 'number') {
-      pct = p.currentTime / p.duration;
-    }
-    // Ebook-only items are read in ABS's own reader, which records its position
-    // as ebookProgress + an ebookLocation CFI rather than `progress`. Items with
-    // audio keep the listening position (that is the audiobook<->ebook sync).
-    let progress: string | undefined;
-    if (!hasAudio && typeof p?.ebookProgress === 'number') {
-      pct = p.ebookProgress;
-      const cfi = p?.ebookLocation;
-      if (typeof cfi === 'string' && cfi.startsWith('epubcfi(') && !knownNoEpub(c, externalId)) {
-        progress = await absEpub(http, c, externalId).then((b) => epubXPath(b, cfi)).catch(() => undefined);
-      }
-    }
-    out.push({
-      externalId,
-      percentage: Math.max(0, Math.min(1, pct)),
-      finished: !!p?.isFinished,
-      ...(progress ? { progress } : {}),
-      updatedAtMs: lu,
-    });
+  if (!c) return null;
+  const { body: p } = await absGet(http, c, `/api/me/progress/${encodeURIComponent(m.externalId)}`);
+  const lu = typeof p?.lastUpdate === 'number' ? p.lastUpdate : 0;
+  if (!p || lu <= sinceMs) return null;
+  const hasAudio = typeof p.duration === 'number' && p.duration > 0;
+  let pct = typeof p.progress === 'number' ? p.progress : 0;
+  if (!pct && hasAudio && typeof p.currentTime === 'number') {
+    pct = p.currentTime / p.duration;
   }
-  return out;
+  // Ebook-only items are read in ABS's own reader, which records its position
+  // as ebookProgress + an ebookLocation CFI rather than `progress`. Items with
+  // audio keep the listening position (that is the audiobook<->ebook sync).
+  let progress: string | undefined;
+  if (!hasAudio && typeof p.ebookProgress === 'number') {
+    pct = p.ebookProgress;
+    const cfi = p.ebookLocation;
+    if (typeof cfi === 'string' && cfi.startsWith('epubcfi(') && !knownNoEpub(c, m.externalId)) {
+      progress = await absEpub(http, c, m.externalId).then((b) => epubXPath(b, cfi)).catch(() => undefined);
+    }
+  }
+  return {
+    externalId: m.externalId,
+    percentage: Math.max(0, Math.min(1, pct)),
+    finished: !!p.isFinished,
+    ...(progress ? { progress } : {}),
+    updatedAtMs: lu,
+  };
 }
 
 async function push(
@@ -356,5 +352,5 @@ export const audiobookshelfConnector: Connector = {
   listCurrentlyReading,
   search,
   resolveEdition,
-  pullChanges,
+  pullProgress,
 };

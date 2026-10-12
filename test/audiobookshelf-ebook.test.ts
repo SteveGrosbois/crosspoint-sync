@@ -43,7 +43,7 @@ const CRED = { server: 'abs.test', token: 'k' };
 const MATCH = { externalId: 'li_1', externalEdition: null, confidence: 1 };
 
 /** Fake ABS: serves the EPUB (or 404s for audio-only) and records progress PATCHes. */
-function absServer(opts: { ebook?: Buffer | null; me?: unknown; itemDuration?: number } = {}) {
+function absServer(opts: { ebook?: Buffer | null; progress?: unknown; itemDuration?: number } = {}) {
   const calls: { url: string; method: string; body?: string }[] = [];
   const http: HttpTransport = async (url, init) => {
     calls.push({ url, method: init.method, body: init.body });
@@ -57,8 +57,7 @@ function absServer(opts: { ebook?: Buffer | null; me?: unknown; itemDuration?: n
       };
     }
     if (url.includes('/api/items/li_1')) return ok({ media: opts.itemDuration ? { duration: opts.itemDuration } : {} });
-    if (url.includes('/api/me/progress/li_1')) return ok({});
-    if (url.endsWith('/api/me')) return ok(opts.me ?? {});
+    if (url.includes('/api/me/progress/li_1')) return ok(init.method === 'GET' ? opts.progress ?? null : {});
     throw new Error(`Unexpected request: ${url}`);
   };
   const patches = () => calls.filter((c) => c.method === 'PATCH').map((c) => JSON.parse(c.body!));
@@ -139,34 +138,28 @@ describe('audiobookshelf ebook position (pull)', () => {
   it('reads ABS reader progress for ebook-only items and maps its CFI to an exact XPath', async () => {
     const abs = absServer({
       ebook: epub(),
-      me: { mediaProgress: [
-        { libraryItemId: 'li_1', episodeId: null, duration: 0, progress: 0, ebookProgress: 0.42, ebookLocation: CFI, isFinished: false, lastUpdate: 2000 },
-      ] },
+      progress: { libraryItemId: 'li_1', duration: 0, progress: 0, ebookProgress: 0.42, ebookLocation: CFI, isFinished: false, lastUpdate: 2000 },
     });
-    const changes = await audiobookshelfConnector.pullChanges!(CRED, abs.http, 1000);
-    expect(changes).toEqual([{ externalId: 'li_1', percentage: 0.42, finished: false, progress: XPATH, updatedAtMs: 2000 }]);
+    const change = await audiobookshelfConnector.pullProgress!(CRED, MATCH, abs.http, 1000);
+    expect(change).toEqual({ externalId: 'li_1', percentage: 0.42, finished: false, progress: XPATH, updatedAtMs: 2000 });
   });
 
   it('keeps the listening position for items with audio', async () => {
     const abs = absServer({
       ebook: epub(),
-      me: { mediaProgress: [
-        { libraryItemId: 'li_1', episodeId: null, duration: 1000, currentTime: 600, progress: 0.6, ebookProgress: 0.1, ebookLocation: CFI, isFinished: false, lastUpdate: 2000 },
-      ] },
+      progress: { libraryItemId: 'li_1', duration: 1000, currentTime: 600, progress: 0.6, ebookProgress: 0.1, ebookLocation: CFI, isFinished: false, lastUpdate: 2000 },
     });
-    const changes = await audiobookshelfConnector.pullChanges!(CRED, abs.http, 1000);
-    expect(changes).toEqual([{ externalId: 'li_1', percentage: 0.6, finished: false, updatedAtMs: 2000 }]);
+    const change = await audiobookshelfConnector.pullProgress!(CRED, MATCH, abs.http, 1000);
+    expect(change).toEqual({ externalId: 'li_1', percentage: 0.6, finished: false, updatedAtMs: 2000 });
     expect(abs.ebookFetches()).toBe(0);
   });
 
   it('falls back to the percentage when the CFI cannot be placed', async () => {
     const abs = absServer({
       ebook: epub(),
-      me: { mediaProgress: [
-        { libraryItemId: 'li_1', episodeId: null, duration: 0, ebookProgress: 0.7, ebookLocation: 'epubcfi(/8/40!/6/2)', isFinished: false, lastUpdate: 2000 },
-      ] },
+      progress: { libraryItemId: 'li_1', duration: 0, ebookProgress: 0.7, ebookLocation: 'epubcfi(/8/40!/6/2)', isFinished: false, lastUpdate: 2000 },
     });
-    const changes = await audiobookshelfConnector.pullChanges!(CRED, abs.http, 1000);
-    expect(changes).toEqual([{ externalId: 'li_1', percentage: 0.7, finished: false, updatedAtMs: 2000 }]);
+    const change = await audiobookshelfConnector.pullProgress!(CRED, MATCH, abs.http, 1000);
+    expect(change).toEqual({ externalId: 'li_1', percentage: 0.7, finished: false, updatedAtMs: 2000 });
   });
 });
