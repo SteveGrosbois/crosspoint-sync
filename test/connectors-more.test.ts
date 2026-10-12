@@ -51,6 +51,18 @@ describe('kosync mirror connector (unit)', () => {
     expect(fake.calls[0].url).toContain('/users/auth');
   });
 
+  it('sends Basic auth only to Calibre-Web /kosync servers', async () => {
+    const seen: Record<string, string>[] = [];
+    const t: HttpTransport = async (_url, init) => {
+      seen.push(init.headers as Record<string, string>);
+      return { status: 200, text: async () => '{}', json: async () => ({}) };
+    };
+    await kosyncConnector.validate({ server: 'cwa.test/kosync/', username: 'u', password: 'p' }, t);
+    await kosyncConnector.validate({ server: 'srv.test', username: 'u', password: 'p' }, t);
+    expect(seen[0].authorization).toBe(`Basic ${Buffer.from('u:p').toString('base64')}`);
+    expect(seen[1].authorization).toBeUndefined();
+  });
+
   it('push forwards progress string + position to the target', async () => {
     const fake = fakeTransport();
     fake.on('/syncs/progress', 200, {});

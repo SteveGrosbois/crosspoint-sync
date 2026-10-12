@@ -40,7 +40,7 @@ const HINTS = {
   microblog: 'Keeps your Currently reading and Finished reading bookshelves in sync.',
   readwise: 'Syncs your highlights to Readwise.',
   'readwise-reader': 'Archives books in Reader when you finish them, and brings your Reader progress back.',
-  kosync: 'Mirrors your reading progress to another KOReader-compatible (KOSync) server.',
+  kosync: 'Mirrors your reading progress to another KOReader-compatible (KOSync) server. For Calibre-Web, use your library URL ending in /kosync.',
   bookfusion: 'Syncs reading progress with BookFusion. You approve the request on bookfusion.com.',
   audiobookshelf: 'Keeps your place between the ebook and the audiobook. Create an API key in Audiobookshelf under Settings, Users, API Keys.',
   bookorbit: 'Syncs progress both ways with your BookOrbit server, and adds your clippings as highlights.',
