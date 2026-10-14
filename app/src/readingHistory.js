@@ -19,14 +19,16 @@ export function decodeHistory(b64, anchorDay = 0, readingDays = []) {
     return extra.has(day) || (bit >= 0 && bit < bytes.length * 8 && ((bytes[bit >> 3] >> (bit & 7)) & 1) === 1)
   }
   const anchorRow = (anchor.getUTCDay() + 6) % 7 // Monday = 0
-  return { read, anchor, anchorRow }
+  return { read, anchor, anchorRow, length: bytes.length * 8 + shift }
 }
+
+const hasDatedHistory = (summary, activity) =>
+  (summary?.anchor_day > 0 && !!summary.history_b64) || Array.isArray(activity?.reading_days)
 
 // Count the same dates the grid fills, anchored to the user's actual today.
 // An empty dated history is known zero; only missing history uses the old total.
 export function readingStreak(summary, activity) {
-  const hasDeviceHistory = summary?.anchor_day > 0 && !!summary.history_b64
-  if (!hasDeviceHistory && !Array.isArray(activity?.reading_days)) return summary?.current_streak ?? 0
+  if (!hasDatedHistory(summary, activity)) return summary?.current_streak ?? 0
   const { read, anchor } = decodeHistory(summary?.history_b64, summary?.anchor_day ?? 0, activity?.reading_days)
   const today = Date.parse(`${localDay(new Date())}T00:00:00Z`)
   const offset = (anchor.getTime() - today) / DAY_MS
@@ -37,6 +39,27 @@ export function readingStreak(summary, activity) {
     n++
   }
   return streak
+}
+
+// Longest run across all known dates, including sync/chosen dates older than the device window.
+export function longestReadingStreak(summary, activity) {
+  if (!hasDatedHistory(summary, activity)) return summary?.streak ?? 0
+  const today = localDay(new Date())
+  const dates = new Set((activity?.reading_days ?? []).filter((day) => day <= today))
+  const { read, anchor, length } = decodeHistory(summary?.history_b64, summary?.anchor_day ?? 0)
+  for (let n = 0; n < length; n++) {
+    if (!read(n)) continue
+    const day = new Date(anchor.getTime() - n * DAY_MS).toISOString().slice(0, 10)
+    if (day <= today) dates.add(day)
+  }
+  let longest = 0, run = 0, previous
+  for (const day of [...dates].sort()) {
+    const time = Date.parse(`${day}T00:00:00Z`)
+    run = time - previous === DAY_MS ? run + 1 : 1
+    longest = Math.max(longest, run)
+    previous = time
+  }
+  return longest
 }
 
 const BASELINE_DAYS = 90

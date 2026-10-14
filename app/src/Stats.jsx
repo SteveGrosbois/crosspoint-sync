@@ -4,7 +4,7 @@ import ShareSheet from './ShareSheet.jsx'
 import { renderCalendarCard, renderStatsCard } from './shareCard.js'
 import { Card, Cover, EmptyState, Eyebrow, ProgressBar, ViaHardcover, duration, pct } from './ui.jsx'
 import { isPace, moodEmoji } from './moods.js'
-import { decodeHistory, localDay, readingStreak, shadeLevels } from './readingHistory.js'
+import { decodeHistory, localDay, longestReadingStreak, readingStreak, shadeLevels } from './readingHistory.js'
 
 export { decodeHistory } from './readingHistory.js'
 
@@ -331,17 +331,24 @@ function timeByDay(summary, activity) {
 }
 
 const PAGES_VIEW = {
+  source: 'Print pages estimated from synced progress',
   fallback: FALLBACK_PAGES,
   tip: (pages) => (pages ? `${Math.round(pages)} pages` : 'read'),
   total: ['pages read', (n) => Math.round(n).toLocaleString()],
 }
 const TIME_VIEW = {
+  source: 'Reading time recorded by your reader',
   fallback: FALLBACK_SECONDS,
   tip: (seconds) => (seconds === undefined ? 'read' : `${duration(seconds)} reading time`),
   total: ['time read', duration],
 }
+// Older firmware sends read-day flags without daily time counters.
+const DAYS_VIEW = {
+  fallback: FALLBACK_SECONDS,
+  tip: () => 'read',
+}
 
-// byDay: every read day -> amount (pages or seconds, undefined when unknown); view: PAGES_VIEW or TIME_VIEW.
+// byDay: every read day -> amount (undefined when unknown); view describes the available data.
 function ReadingCalendar({ byDay, view, days = [], books = [] }) {
   const [scale, setScale] = useState('year')
   const [back, setBack] = useState(0)
@@ -371,7 +378,7 @@ function ReadingCalendar({ byDay, view, days = [], books = [] }) {
     const tip = `${fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })}: ${byDay.has(key) ? view.tip(byDay.get(key)) : 'no reading'}`
     return <div key={d.getTime()} data-tip={tip} aria-label={tip} className={`aspect-square ${round} ${SHADES[level(key)]}`} />
   }
-  // Share image: the period on screen, its reading days, pages and longest streak.
+  // Share the visible period, reading days, available page/time totals and longest streak.
   const share = () => {
     let total = 0, streak = 0, run = 0
     for (let d = first; d <= last && d <= today; d = new Date(d.getTime() + DAY_MS)) {
@@ -411,7 +418,7 @@ function ReadingCalendar({ byDay, view, days = [], books = [] }) {
       subtitle: label,
       tiles: [
         ['reading days', count],
-        [view.total[0], view.total[1](total)],
+        ...(view.total ? [[view.total[0], view.total[1](total)]] : []),
         ['day streak', streak],
       ],
       blocks,
@@ -430,7 +437,7 @@ function ReadingCalendar({ byDay, view, days = [], books = [] }) {
             fileName: `Reading days ${label}.png`,
             text: `${count} reading ${count === 1 ? 'day' : 'days'}, ${label}. Tracked with CrossPoint Sync.`,
           }}
-          renderKey={`${scale}-${back}-${count}`}
+          renderKey={`${view.total?.[0] ?? 'reading days'}-${scale}-${back}-${count}`}
           onClose={() => setSharing(false)}
           render={share}
         />
@@ -460,6 +467,7 @@ function ReadingCalendar({ byDay, view, days = [], books = [] }) {
           ))}
         </div>
       </div>
+      {view.source && <p className="mt-3 text-xs text-stone-500">{view.source}</p>}
       <div className="mt-3 flex items-center justify-between">
         <button type="button" className={arrow} onClick={() => setBack(back + 1)} aria-label="Earlier">
           <ChevronLeft className="size-5" strokeWidth={1.75} />
@@ -517,9 +525,7 @@ function ReadingCalendar({ byDay, view, days = [], books = [] }) {
           </div>
         )}
       </div>
-      <div className="mt-3">
-        <ShadeLegend />
-      </div>
+      {view.total && <div className="mt-3"><ShadeLegend /></div>}
     </Card>
   )
 }
@@ -838,7 +844,7 @@ function Timeline({ session, activity, books }) {
 
 export default function Stats({ session, tab = '', summary, activity, books }) {
   const hasTime = summary?.devices?.length > 0
-  // Hide both tiles until the reader has sent any daily history, even a zero counter.
+  // Reveal daily tiles and calendar time labels together after any history, even a zero counter.
   const daily = summary?.daily?.length ? dailyReading(summary.daily) : null
   const [sharing, setSharing] = useState(false)
   const header = (
@@ -871,7 +877,7 @@ export default function Stats({ session, tab = '', summary, activity, books }) {
           <Tiles
             tiles={[
               ['Current streak', `${readingStreak(summary, activity)} days`],
-              ['Longest streak', `${summary.streak} days`],
+              ['Longest streak', `${longestReadingStreak(summary, activity)} days`],
               ...(daily
                 ? [
                     ['Today', duration(daily.today)],
@@ -884,7 +890,7 @@ export default function Stats({ session, tab = '', summary, activity, books }) {
               ['Books finished', summary.completed],
             ]}
           />
-          <ReadingCalendar byDay={timeByDay(summary, activity)} view={TIME_VIEW} days={activity?.days} books={books} />
+          <ReadingCalendar byDay={timeByDay(summary, activity)} view={daily ? TIME_VIEW : DAYS_VIEW} days={activity?.days} books={books} />
           <div className="md:grid md:grid-cols-2 md:gap-4">
             <Bars title="Time of day" labels={['Morning', 'Afternoon', 'Evening', 'Night']} values={summary.tod} />
             <Bars title="Day of week" labels={['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']} values={summary.dow} />

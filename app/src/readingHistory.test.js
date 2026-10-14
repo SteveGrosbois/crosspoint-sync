@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { localDay, readingStreak, shadeLevels } from './readingHistory.js'
+import { localDay, longestReadingStreak, readingStreak, shadeLevels } from './readingHistory.js'
 
 const anchorDay = (date) => (Date.parse(`${date}T00:00:00Z`) - Date.UTC(2000, 0, 1)) / 86400000
 const summary = (date, bits) => ({
@@ -54,6 +54,53 @@ describe('current reading streak from grid dates', () => {
   it('uses local calendar dates across daylight saving time changes', () => {
     vi.setSystemTime(new Date(2026, 10, 2, 0, 30))
     expect(readingStreak(null, { reading_days: ['2026-10-31', '2026-11-01', '2026-11-02'] })).toBe(3)
+  })
+})
+
+describe('longest reading streak from combined dates', () => {
+  it('joins device and sync dates without counting overlaps twice or using the old total', () => {
+    expect(longestReadingStreak({ ...summary('2026-09-28', 3), streak: 99 }, {
+      reading_days: ['2026-09-30', '2026-09-29', '2026-09-28', '2026-09-29'],
+    })).toBe(4)
+  })
+
+  it('finds an older run and never fills gaps between chosen dates', () => {
+    const device = summary('2026-09-30', 0b111001)
+    expect(longestReadingStreak(device, { reading_days: ['2026-09-29'] })).toBe(3)
+    expect(readingStreak(device, { reading_days: ['2026-09-29'] })).toBe(2)
+  })
+
+  it('updates when a chosen date bridges or breaks a run', () => {
+    const device = summary('2026-09-28', 1)
+    expect(longestReadingStreak(device, { reading_days: ['2026-09-29', '2026-09-30'] })).toBe(3)
+    expect(longestReadingStreak(device, { reading_days: ['2026-09-30'] })).toBe(1)
+  })
+
+  it('includes sync-only runs older than the device window', () => {
+    expect(longestReadingStreak(summary('2026-09-30', 1), {
+      reading_days: ['2020-02-28', '2020-02-29', '2020-03-01'],
+    })).toBe(3)
+  })
+
+  it('handles year boundaries and excludes future sync and device dates', () => {
+    vi.setSystemTime(new Date(2027, 0, 1, 12))
+    expect(longestReadingStreak(null, {
+      reading_days: ['2026-12-30', '2026-12-31', '2027-01-01', '2027-01-02'],
+    })).toBe(3)
+    expect(longestReadingStreak(summary('2027-01-03', 31))).toBe(3)
+    expect(longestReadingStreak(null, { reading_days: ['2027-01-02'] })).toBe(0)
+  })
+
+  it('uses the device fallback only when dated history is unavailable', () => {
+    expect(longestReadingStreak({ streak: 8 }, null)).toBe(8)
+    expect(longestReadingStreak({ streak: 8 }, { reading_days: [] })).toBe(0)
+    expect(longestReadingStreak({ ...summary('2026-09-30', 0), streak: 8 })).toBe(0)
+    expect(longestReadingStreak(null, null)).toBe(0)
+  })
+
+  it('uses calendar dates across daylight saving time changes', () => {
+    vi.setSystemTime(new Date(2026, 10, 2, 0, 30))
+    expect(longestReadingStreak(null, { reading_days: ['2026-10-31', '2026-11-01', '2026-11-02'] })).toBe(3)
   })
 })
 

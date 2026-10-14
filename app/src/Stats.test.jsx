@@ -2,6 +2,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import Stats, { decodeHistory } from './Stats.jsx'
+import { renderCalendarCard } from './shareCard.js'
+
+vi.mock('./shareCard.js', async (importOriginal) => ({
+  ...await importOriginal(),
+  renderCalendarCard: vi.fn(),
+}))
+vi.mock('./ShareSheet.jsx', () => ({
+  default: ({ render }) => <button onClick={render}>Render calendar share</button>,
+}))
 
 const day = (s) => Date.parse(`${s}T00:00:00Z`)
 const anchorDay = (s) => (day(s) - Date.UTC(2000, 0, 1)) / 86400000
@@ -76,7 +85,82 @@ describe('daily reading time', () => {
 })
 
 describe('reading grids', () => {
-  it('updates the current streak from the same dates that fill the grid', () => {
+  const summary = {
+    devices: [{ device: 'CrossInk' }], history_b64: btoa(String.fromCharCode(3)),
+    anchor_day: anchorDay('2026-09-30'), seconds: 4200, pages: 10, sessions: 1,
+    completed: 0, current_streak: 2, streak: 2,
+    tod: [0, 0, 0, 0], dow: [0, 0, 0, 0, 0, 0, 0],
+    daily: [{ date: '2026-09-30', seconds: 4200 }],
+  }
+  const synced = {
+    books: [], pages_total: 25, reading_days: ['2026-09-27'],
+    days: [{ day: '2026-09-30', syncs: 1, pages: 5 }, { day: '2026-09-28', syncs: 1, pages: 20 }],
+  }
+
+  it.each([undefined, null, []])('uses reading days before daily time history exists: %s', (daily) => {
+    const { queryByText, getByRole, getByLabelText } = render(
+      <Stats session={{}} books={[]} summary={{ ...summary, daily }} activity={synced} />,
+    )
+    expect(queryByText('Reading time recorded by your reader')).toBeNull()
+    expect(queryByText('Today')).toBeNull()
+    expect(queryByText('7-day average')).toBeNull()
+    expect(queryByText('Less')).toBeNull()
+    expect(getByLabelText('Wed, Sep 30: read')).toBeTruthy()
+    expect(getByLabelText('Tue, Sep 29: read')).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: 'Share your reading days' }))
+    fireEvent.click(getByRole('button', { name: 'Render calendar share' }))
+    expect(renderCalendarCard.mock.lastCall[0].tiles).toEqual([['reading days', 3], ['day streak', 2]])
+  })
+
+  it.each([0, 4200])('reveals daily time labels with the first record of %s seconds and keeps the selected range', (seconds) => {
+    const props = { session: {}, books: [], activity: synced }
+    const { getByRole, getByText, getByLabelText, rerender } = render(
+      <Stats {...props} summary={{ ...summary, daily: [] }} />,
+    )
+    fireEvent.click(getByRole('button', { name: 'Month' }))
+    fireEvent.click(getByRole('button', { name: 'Earlier' }))
+    rerender(<Stats {...props} summary={{ ...summary, daily: [{ date: '2026-09-30', seconds }] }} />)
+    expect(getByText('Reading time recorded by your reader')).toBeTruthy()
+    expect(getByText('August 2026')).toBeTruthy()
+    expect(getByText('Today')).toBeTruthy()
+    expect(getByText('7-day average')).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: 'Later' }))
+    expect(getByLabelText(`Wed, Sep 30: ${seconds ? '1h 10m' : '0m'} reading time`)).toBeTruthy()
+  })
+
+  it('keeps time available with daily history outside the visible period', () => {
+    const daily = [{ date: '2025-08-01', seconds: 600 }]
+    const { getByText, getByLabelText } = render(<Stats session={{}} books={[]} activity={synced} summary={{ ...summary, daily }} />)
+    expect(getByText('Reading time recorded by your reader')).toBeTruthy()
+    expect(getByLabelText('Wed, Sep 30: read')).toBeTruthy()
+    expect(getByText('Today').nextElementSibling.textContent).toBe('0m')
+  })
+
+  it.each([false, true])('uses the device calendar with sync activity present and daily history: %s', (hasDaily) => {
+    const props = { session: {}, books: [], summary: { ...summary, daily: hasDaily ? summary.daily : [] } }
+    const { queryByRole, getByRole, getByLabelText, rerender } = render(<Stats {...props} />)
+    const tip = `Wed, Sep 30: ${hasDaily ? '1h 10m reading time' : 'read'}`
+    expect(getByLabelText(tip)).toBeTruthy()
+    rerender(<Stats {...props} activity={synced} />)
+    expect(queryByRole('group', { name: 'Reading calendar measure' })).toBeNull()
+    expect(queryByRole('button', { name: 'Pages read' })).toBeNull()
+    expect(getByLabelText(tip)).toBeTruthy()
+    // The reader says Sep 29 was read; sync progress has pages only on Sep 28 and Sep 30.
+    expect(getByLabelText('Tue, Sep 29: read')).toBeTruthy()
+    expect(getByLabelText('Mon, Sep 28: no reading')).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: 'Share your reading days' }))
+    fireEvent.click(getByRole('button', { name: 'Render calendar share' }))
+    expect(renderCalendarCard.mock.lastCall[0].tiles).toEqual([
+      ['reading days', 3],
+      ...(hasDaily ? [['time read', '1h 10m']] : []),
+      ['day streak', 2],
+    ])
+    // Readers without device stats still get their original sync-page calendar.
+    rerender(<Stats {...props} activity={synced} summary={null} />)
+    expect(getByLabelText('Wed, Sep 30: 5 pages')).toBeTruthy()
+  })
+
+  it('updates both streaks from the same dates that fill the grid', () => {
     const summary = {
       devices: [{ device: 'CrossInk' }], current_streak: 8, streak: 12,
       seconds: 0, pages: 0, sessions: 0, completed: 0,
@@ -84,14 +168,16 @@ describe('reading grids', () => {
     }
     const { getByText, rerender, container } = render(<Stats session={{}} books={[]} summary={summary} />)
     expect(getByText('Current streak').nextElementSibling.textContent).toBe('8 days')
+    expect(getByText('Longest streak').nextElementSibling.textContent).toBe('12 days')
     const combined = { ...summary, anchor_day: anchorDay('2026-09-28'), history_b64: btoa(String.fromCharCode(1)) }
     const synced = { books: [], days: [], reading_days: ['2026-09-29', '2026-09-30'] }
     rerender(<Stats session={{}} books={[]} summary={combined} activity={synced} />)
     expect(getByText('Current streak').nextElementSibling.textContent).toBe('3 days')
     expect(container.querySelectorAll('[data-tip$=": read"]').length).toBe(3)
-    expect(getByText('Longest streak').nextElementSibling.textContent).toBe('12 days')
+    expect(getByText('Longest streak').nextElementSibling.textContent).toBe('3 days')
     rerender(<Stats session={{}} books={[]} summary={combined} activity={{ ...synced, reading_days: [] }} />)
     expect(getByText('Current streak').nextElementSibling.textContent).toBe('0 days')
+    expect(getByText('Longest streak').nextElementSibling.textContent).toBe('1 days')
   })
 
   it('shows recorded daily time on hover and touch without inventing time for other dates', () => {
