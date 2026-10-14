@@ -415,7 +415,7 @@ export async function renderStatsCard({ heading, tiles, covers, chart, moods = [
 // Reading-days calendar card. `blocks` are stacked calendars, each with `grid`
 // rows of shade levels (0-4, null = outside the period) and optional `top`
 // (column), `left` (row) and `bottom` (column) labels.
-const DAY_SHADES = ['#e7e5df', '#d6e5de', '#b3cfc2', '#8fb9a6', '#69917d']
+const DAY_SHADES = ['#e7e5df', '#b3cfc2', '#8fb9a6', '#69917d', '#4a7a62']
 export async function renderCalendarCard({ eyebrow, heading, subtitle, tiles, blocks, moods = [] }) {
   const logo = await loadImage(`${import.meta.env.BASE_URL}logo.png`, false)
   const { canvas, ctx, bottom: tilesBottom } = await statsBase(heading, tiles, 3, 440, eyebrow)

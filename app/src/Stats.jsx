@@ -4,11 +4,26 @@ import ShareSheet from './ShareSheet.jsx'
 import { renderCalendarCard, renderStatsCard } from './shareCard.js'
 import { Card, Cover, EmptyState, Eyebrow, ProgressBar, ViaHardcover, duration, pct } from './ui.jsx'
 import { isPace, moodEmoji } from './moods.js'
-import { decodeHistory, localDay, readingStreak } from './readingHistory.js'
+import { decodeHistory, localDay, readingStreak, shadeLevels } from './readingHistory.js'
 
 export { decodeHistory } from './readingHistory.js'
 
-const WEEKS = 52 // phones show the newest 26
+// Shades for the reading calendar, light to dark; levels 1-4 are relative to your median day.
+const SHADES = ['bg-stone-100', 'bg-brand-200', 'bg-brand-300', 'bg-brand-400', 'bg-brand-500']
+const FALLBACK_SECONDS = 30 * 60 // median assumed until there is enough history
+const FALLBACK_PAGES = 20
+
+function ShadeLegend() {
+  return (
+    <div className="flex items-center gap-1 font-mono text-[0.65rem] text-stone-400">
+      Less
+      {SHADES.map((c) => (
+        <span key={c} aria-hidden="true" className={`size-2.5 rounded-[2px] ${c}`} />
+      ))}
+      More
+    </div>
+  )
+}
 
 // A tooltip for grid cells carrying data-tip: follows the mouse on hover, and on
 // touch shows while a finger is held down (sliding across cells updates it).
@@ -60,62 +75,21 @@ const deviceList = (devices) => {
   return [...counts].map(([name, n]) => (n > 1 ? `${n} ${name} readers` : name)).join(', ')
 }
 
-function Heatmap({ summary, activity }) {
-  const { read, anchor, anchorRow } = decodeHistory(summary.history_b64, summary.anchor_day, activity?.reading_days)
-  const timeByDay = new Map((summary.daily ?? []).map((day) => [day.date, day.seconds]))
-  let days = 0
-  for (let n = 0; n < 365; n++) if (read(n)) days++
-  const cols = Array.from({ length: WEEKS }, (_, c) =>
-    Array.from({ length: 7 }, (_, r) => anchorRow - r + (WEEKS - 1 - c) * 7)
-  )
-  const { box, handlers, bubble } = useCellTip()
-  const tipFor = (n) => {
-    const d = new Date(anchor.getTime() - n * 86400000)
-    const seconds = timeByDay.get(d.toISOString().slice(0, 10))
-    const label = `${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}: ${read(n) ? 'read' : 'no reading'}`
-    return seconds === undefined ? label : `${label}\n${duration(seconds)} reading time`
-  }
-  return (
-    <Card className="mt-4 p-4">
-      <div className="flex items-baseline justify-between">
-        <h2 className="font-display text-lg font-semibold text-stone-900">Reading days</h2>
-        <p className="font-mono text-xs text-stone-500">{days} in the last year</p>
-      </div>
-      <div ref={box} {...handlers} style={NO_CALLOUT} className="relative mt-3 flex justify-between gap-[3px] select-none">
-        {bubble}
-        {cols.map((col, c) => (
-          <div key={c} className={`flex-1 flex-col gap-[3px] ${c < WEEKS / 2 ? 'hidden md:flex' : 'flex'}`}>
-            {col.map((n) => (
-              <div
-                key={n}
-                data-tip={n < 0 ? undefined : tipFor(n)}
-                className={`aspect-square rounded-[2px] ${n < 0 ? 'bg-transparent' : read(n) ? 'bg-brand-500' : 'bg-stone-100'}`}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-      <p className="mt-2 text-right font-mono text-[0.65rem] text-stone-400">
-        through {anchor.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' })}
-      </p>
-    </Card>
-  )
-}
-
 function Bars({ title, labels, values }) {
   const max = Math.max(...values, 1)
   return (
     <Card className="mt-4 p-4">
       <h2 className="font-display text-lg font-semibold text-stone-900">{title}</h2>
-      <div className="mt-3 space-y-2">
+      {/* One grid for all rows, so the value column fits the widest duration and the bars share what's left. */}
+      <div className="mt-3 grid grid-cols-[4rem_1fr_auto] items-center gap-x-3 gap-y-2 text-xs">
         {labels.map((l, i) => (
-          <div key={l} className="flex items-center gap-3 text-xs">
-            <span className="w-16 shrink-0 text-stone-500">{l}</span>
-            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-stone-100">
+          <Fragment key={l}>
+            <span className="text-stone-500">{l}</span>
+            <div className="h-2.5 overflow-hidden rounded-full bg-stone-100">
               <div className="h-full rounded-full bg-brand-500" style={{ width: `${(values[i] / max) * 100}%` }} />
             </div>
-            <span className="w-14 shrink-0 text-right font-mono text-stone-500">{duration(values[i])}</span>
-          </div>
+            <span className="text-right font-mono whitespace-nowrap text-stone-500">{duration(values[i])}</span>
+          </Fragment>
         ))}
       </div>
     </Card>
@@ -304,9 +278,8 @@ function WeeklyPages({ days, weeks = 12 }) {
   )
 }
 
-// Calendar of reading days from the sync history: one square per day, shaded by
-// print pages read that day. Weekday rows (Monday first), weeks run left to right.
-const SHADES = ['bg-stone-100', 'bg-brand-100', 'bg-brand-200', 'bg-brand-300', 'bg-brand-400']
+// Calendar of reading days: one square per day, shaded by pages or reading time
+// against your median day. Weekday rows (Monday first), weeks run left to right.
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const SCALES = [
   ['month', 'Month'],
@@ -334,16 +307,48 @@ function calendarRange(scale, back, today) {
   return { weeks, first, last, label: `${fmt(first, opts)} to ${fmt(last > today ? today : last, { month: 'short', year: 'numeric' })}` }
 }
 
-function ReadingCalendar({ days, readingDays = [], books = [] }) {
+const HISTORY_DAYS = 730
+
+// Read days from sync history: any sync marks a day, mapped to pages read (chosen dates count as 0).
+function pagesByDay(days, readingDays = []) {
+  const byDay = new Map(days.filter((d) => d.syncs > 0 || d.pages > 0).map((d) => [d.day, d.pages]))
+  for (const day of readingDays) if (!byDay.has(day)) byDay.set(day, 0)
+  return byDay
+}
+
+// Read days from device history and chosen dates, mapped to recorded seconds (undefined when unknown).
+function timeByDay(summary, activity) {
+  const { read, anchor } = decodeHistory(summary.history_b64, summary.anchor_day, activity?.reading_days)
+  const seconds = new Map((summary.daily ?? []).map((d) => [d.date, d.seconds]))
+  const byDay = new Map()
+  for (let n = 0; n < HISTORY_DAYS; n++) {
+    if (!read(n)) continue
+    const key = new Date(anchor.getTime() - n * DAY_MS).toISOString().slice(0, 10)
+    byDay.set(key, seconds.get(key))
+  }
+  for (const [key, s] of seconds) if (s > 0 && !byDay.has(key)) byDay.set(key, s)
+  return byDay
+}
+
+const PAGES_VIEW = {
+  fallback: FALLBACK_PAGES,
+  tip: (pages) => (pages ? `${Math.round(pages)} pages` : 'read'),
+  total: ['pages read', (n) => Math.round(n).toLocaleString()],
+}
+const TIME_VIEW = {
+  fallback: FALLBACK_SECONDS,
+  tip: (seconds) => (seconds === undefined ? 'read' : `${duration(seconds)} reading time`),
+  total: ['time read', duration],
+}
+
+// byDay: every read day -> amount (pages or seconds, undefined when unknown); view: PAGES_VIEW or TIME_VIEW.
+function ReadingCalendar({ byDay, view, days = [], books = [] }) {
   const [scale, setScale] = useState('year')
   const [back, setBack] = useState(0)
   const [sharing, setSharing] = useState(false)
   const scroller = useRef(null)
-  // Any sync marks a reading day; pages read deepen the shade.
-  const byDay = new Map(days.filter((d) => d.syncs > 0 || d.pages > 0).map((d) => [d.day, d.pages]))
-  for (const day of readingDays) if (!byDay.has(day)) byDay.set(day, 0)
-  const max = Math.max(...byDay.values(), 1)
-  const level = (day) => (!byDay.has(day) ? 0 : Math.max(1, Math.min(4, Math.ceil((byDay.get(day) / max) * 4))))
+  const { level: amountLevel } = shadeLevels(byDay, { fallback: view.fallback })
+  const level = (day) => (!byDay.has(day) ? 0 : amountLevel(byDay.get(day)))
   const today = new Date()
   today.setHours(12, 0, 0, 0)
   const { weeks, first, last, label } = calendarRange(scale, back, today)
@@ -363,17 +368,15 @@ function ReadingCalendar({ days, readingDays = [], books = [] }) {
   const cell = (d, round) => {
     if (!shown(d)) return <div key={d.getTime()} className="aspect-square" />
     const key = localDay(d)
-    const pages = byDay.get(key) ?? 0
-    const lv = level(key)
-    const tip = `${fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })}: ${pages ? `${Math.round(pages)} pages` : lv ? 'read' : 'no reading'}`
-    return <div key={d.getTime()} data-tip={tip} aria-label={tip} className={`aspect-square ${round} ${SHADES[lv]}`} />
+    const tip = `${fmt(d, { weekday: 'short', month: 'short', day: 'numeric' })}: ${byDay.has(key) ? view.tip(byDay.get(key)) : 'no reading'}`
+    return <div key={d.getTime()} data-tip={tip} aria-label={tip} className={`aspect-square ${round} ${SHADES[level(key)]}`} />
   }
   // Share image: the period on screen, its reading days, pages and longest streak.
   const share = () => {
-    let pages = 0, streak = 0, run = 0
+    let total = 0, streak = 0, run = 0
     for (let d = first; d <= last && d <= today; d = new Date(d.getTime() + DAY_MS)) {
       const key = localDay(d)
-      pages += byDay.get(key) ?? 0
+      total += byDay.get(key) ?? 0
       run = byDay.has(key) ? run + 1 : 0
       streak = Math.max(streak, run)
     }
@@ -408,7 +411,7 @@ function ReadingCalendar({ days, readingDays = [], books = [] }) {
       subtitle: label,
       tiles: [
         ['reading days', count],
-        ['pages read', Math.round(pages).toLocaleString()],
+        [view.total[0], view.total[1](total)],
         ['day streak', streak],
       ],
       blocks,
@@ -486,11 +489,12 @@ function ReadingCalendar({ days, readingDays = [], books = [] }) {
         ) : (
           <div ref={scroller} className="mt-3 overflow-x-auto">
             <div
-              className={`grid ${year ? 'w-max min-w-full' : 'w-full'}`}
+              // Phones scroll a year at 11px squares; wider screens fit it to the card.
+              className={`grid ${year ? 'w-max min-w-full [--cell-min:11px] md:w-full md:[--cell-min:0px]' : 'w-full'}`}
               style={{
                 gridAutoFlow: 'column',
                 gridTemplateRows: 'repeat(7, auto) auto',
-                gridTemplateColumns: `auto repeat(${weeks.length}, minmax(${year ? '11px' : '0'}, ${year ? '1fr' : '2.25rem'}))`,
+                gridTemplateColumns: `auto repeat(${weeks.length}, minmax(${year ? 'var(--cell-min)' : '0'}, ${year ? '1fr' : '2.25rem'}))`,
                 gap: 3,
                 justifyContent: year ? undefined : 'center',
               }}
@@ -512,6 +516,9 @@ function ReadingCalendar({ days, readingDays = [], books = [] }) {
             </div>
           </div>
         )}
+      </div>
+      <div className="mt-3">
+        <ShadeLegend />
       </div>
     </Card>
   )
@@ -877,7 +884,7 @@ export default function Stats({ session, tab = '', summary, activity, books }) {
               ['Books finished', summary.completed],
             ]}
           />
-          <Heatmap summary={summary} activity={activity} />
+          <ReadingCalendar byDay={timeByDay(summary, activity)} view={TIME_VIEW} days={activity?.days} books={books} />
           <div className="md:grid md:grid-cols-2 md:gap-4">
             <Bars title="Time of day" labels={['Morning', 'Afternoon', 'Evening', 'Night']} values={summary.tod} />
             <Bars title="Day of week" labels={['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']} values={summary.dow} />
@@ -887,7 +894,9 @@ export default function Stats({ session, tab = '', summary, activity, books }) {
           </p>
         </>
       ) : (
-        activity && <ReadingCalendar days={activity.days} readingDays={activity.reading_days} books={books} />
+        activity && (
+          <ReadingCalendar byDay={pagesByDay(activity.days, activity.reading_days)} view={PAGES_VIEW} days={activity.days} books={books} />
+        )
       )}
     </div>
   )

@@ -112,20 +112,20 @@ describe('reading grids', () => {
       fireEvent(el, event)
     }
     pointer(cell('Wed, Sep 30'), 'pointerover', 'mouse')
-    expect(getByRole('tooltip').textContent).toBe('Wed, Sep 30, 2026: read\n1h 10m reading time')
+    expect(getByRole('tooltip').textContent).toBe('Wed, Sep 30: 1h 10m reading time')
     pointer(cell('Tue, Sep 29'), 'pointerover', 'mouse')
-    expect(getByRole('tooltip').textContent).toBe('Tue, Sep 29, 2026: read\n0m reading time')
+    expect(getByRole('tooltip').textContent).toBe('Tue, Sep 29: 0m reading time')
     pointer(cell('Mon, Sep 28'), 'pointerover', 'mouse')
-    expect(getByRole('tooltip').textContent).toBe('Mon, Sep 28, 2026: read')
+    expect(getByRole('tooltip').textContent).toBe('Mon, Sep 28: read')
     pointer(cell('Sun, Sep 27'), 'pointerover', 'mouse')
-    expect(getByRole('tooltip').textContent).toBe('Sun, Sep 27, 2026: no reading')
+    expect(getByRole('tooltip').textContent).toBe('Sun, Sep 27: no reading')
     pointer(cell('Wed, Sep 30'), 'pointerdown', 'touch')
     expect(getByRole('tooltip').textContent).toContain('1h 10m reading time')
     pointer(cell('Wed, Sep 30'), 'pointerup', 'touch')
     expect(queryByRole('tooltip')).toBeNull()
     rerender(<Stats session={{}} books={[]} summary={{ ...summary, daily: undefined }} />)
     pointer(cell('Wed, Sep 30'), 'pointerover', 'mouse')
-    expect(getByRole('tooltip').textContent).toBe('Wed, Sep 30, 2026: read')
+    expect(getByRole('tooltip').textContent).toBe('Wed, Sep 30: read')
   })
 
   it('adds chosen dates to device history and preserves existing bits when the anchor moves', () => {
@@ -157,5 +157,53 @@ describe('reading grids', () => {
     rerender(<Stats {...props} activity={{ ...activity, reading_days: ['2026-08-11', '2026-08-18'] }} />)
     expect(tip('Sun, Aug 16')).toMatch(/: no reading$/)
     expect(tip('Tue, Aug 18')).toMatch(/: read$/)
+  })
+
+  it('shades device calendar days against the median day and gives unknown time the median shade', () => {
+    const summary = {
+      devices: [{ device: 'CrossInk' }], history_b64: btoa(String.fromCharCode(15)),
+      anchor_day: anchorDay('2026-09-30'), seconds: 0, pages: 0, sessions: 0, completed: 0,
+      current_streak: 4, streak: 4, tod: [0, 0, 0, 0], dow: [0, 0, 0, 0, 0, 0, 0],
+      daily: [{ date: '2026-09-30', seconds: 600 }, { date: '2026-09-29', seconds: 1800 }, { date: '2026-09-28', seconds: 7200 }],
+    }
+    const { container } = render(<Stats session={{}} books={[]} summary={summary} />)
+    const cls = (date) => [...container.querySelectorAll('[data-tip]')].find((el) => el.dataset.tip.startsWith(date)).className
+    expect(cls('Wed, Sep 30')).toContain('bg-brand-200')
+    expect(cls('Tue, Sep 29')).toContain('bg-brand-300')
+    expect(cls('Mon, Sep 28')).toContain('bg-brand-500')
+    expect(cls('Sun, Sep 27')).toContain('bg-brand-300')
+    expect(cls('Sat, Sep 26')).toContain('bg-stone-100')
+    expect(container.querySelectorAll('[aria-hidden="true"]').length).toBeGreaterThanOrEqual(5)
+  })
+
+  it('gives the device view the month, 3 month and year scales with time tooltips', () => {
+    const summary = {
+      devices: [{ device: 'CrossInk' }], history_b64: btoa(String.fromCharCode(3)),
+      anchor_day: anchorDay('2026-09-30'), seconds: 0, pages: 0, sessions: 0, completed: 0,
+      current_streak: 2, streak: 2, tod: [0, 0, 0, 0], dow: [0, 0, 0, 0, 0, 0, 0],
+      daily: [{ date: '2026-09-30', seconds: 4200 }],
+    }
+    const { container, getByText, getByLabelText } = render(<Stats session={{}} books={[]} summary={summary} />)
+    expect(getByText('3 months')).toBeTruthy()
+    expect(getByLabelText('Share your reading days')).toBeTruthy()
+    fireEvent.click(getByText('Month'))
+    const tips = [...container.querySelectorAll('[data-tip]')].map((el) => el.dataset.tip)
+    expect(tips).toContain('Wed, Sep 30: 1h 10m reading time')
+    expect(tips).toContain('Tue, Sep 29: read')
+    expect(tips).toContain('Mon, Sep 28: no reading')
+    expect(tips.length).toBe(30)
+  })
+
+  it('shades the sync calendar by pages against the median day', () => {
+    const days = [
+      { day: '2026-09-30', syncs: 1, pages: 5 },
+      { day: '2026-09-29', syncs: 1, pages: 20 },
+      { day: '2026-09-28', syncs: 1, pages: 80 },
+    ]
+    const { container } = render(<Stats session={{}} books={[]} summary={null} activity={{ ...activity, days, reading_days: [] }} />)
+    const cls = (date) => container.querySelector(`[aria-label^="${date}"]`).className
+    expect(cls('Wed, Sep 30')).toContain('bg-brand-200')
+    expect(cls('Tue, Sep 29')).toContain('bg-brand-300')
+    expect(cls('Mon, Sep 28')).toContain('bg-brand-500')
   })
 })

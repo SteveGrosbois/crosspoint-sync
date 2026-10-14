@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { readingStreak } from './readingHistory.js'
+import { localDay, readingStreak, shadeLevels } from './readingHistory.js'
 
 const anchorDay = (date) => (Date.parse(`${date}T00:00:00Z`) - Date.UTC(2000, 0, 1)) / 86400000
 const summary = (date, bits) => ({
@@ -54,5 +54,42 @@ describe('current reading streak from grid dates', () => {
   it('uses local calendar dates across daylight saving time changes', () => {
     vi.setSystemTime(new Date(2026, 10, 2, 0, 30))
     expect(readingStreak(null, { reading_days: ['2026-10-31', '2026-11-01', '2026-11-02'] })).toBe(3)
+  })
+})
+
+describe('shade levels from the median day', () => {
+  const days = (n, v, from = 1) => Array.from({ length: n }, (_, i) => [localDay(new Date(2026, 8, from + i)), v])
+
+  it('uses the fallback with no data', () => {
+    expect(shadeLevels([], { fallback: 30 }).baseline).toBe(30)
+    expect(shadeLevels(days(3, 0), { fallback: 30 }).baseline).toBe(30)
+  })
+
+  it('blends the fallback with the median as history grows', () => {
+    expect(shadeLevels(days(14, 60), { fallback: 30 }).baseline).toBe(45)
+    expect(shadeLevels(days(14, 60), { fallback: 30 }).baseline).toBeLessThan(shadeLevels(days(28, 60), { fallback: 30 }).baseline)
+  })
+
+  it('resists outliers', () => {
+    const { baseline } = shadeLevels([...days(14, 30), ...days(2, 5000, 20)], { fallback: 30 })
+    expect(baseline).toBe(30)
+  })
+
+  it('maps ratios to levels at the boundaries', () => {
+    const { level } = shadeLevels([], { fallback: 100 })
+    expect([49, 50, 124, 125, 199, 200].map(level)).toEqual([1, 2, 2, 3, 3, 4])
+  })
+
+  it('shades unknown amounts as the median and zero as the lightest', () => {
+    const { level } = shadeLevels([], { fallback: 100 })
+    expect(level(undefined)).toBe(2)
+    expect(level(null)).toBe(2)
+    expect(level(0)).toBe(1)
+  })
+
+  it('ignores values older than 90 days', () => {
+    const old = [[localDay(new Date(2026, 5, 1)), 600], [localDay(new Date(2026, 5, 2)), 600]]
+    expect(shadeLevels(old, { fallback: 30 }).baseline).toBe(30)
+    expect(shadeLevels([...old, ...days(14, 60)], { fallback: 30 }).baseline).toBe(45)
   })
 })

@@ -38,3 +38,22 @@ export function readingStreak(summary, activity) {
   }
   return streak
 }
+
+const BASELINE_DAYS = 90
+
+// Shade levels 1-4 for a read day, relative to the user's median day. `entries` is
+// [date, amount] pairs; amounts of the last 90 days are blended with a fallback
+// (worth `prior` days) so a few early days don't set the scale.
+export function shadeLevels(entries, { fallback, prior = 14 }) {
+  const cutoff = localDay(new Date(Date.now() - BASELINE_DAYS * DAY_MS))
+  const sorted = [...entries].filter(([date, v]) => date > cutoff && v > 0).map(([, v]) => v).sort((a, b) => a - b)
+  const n = sorted.length
+  const median = n % 2 ? sorted[(n - 1) / 2] : ((sorted[n / 2 - 1] ?? 0) + (sorted[n / 2] ?? 0)) / 2
+  const baseline = (prior * fallback + n * median) / (prior + n)
+  const level = (amount) => {
+    if (amount == null) return 2
+    const r = amount / baseline
+    return r < 0.5 ? 1 : r < 1.25 ? 2 : r < 2 ? 3 : 4
+  }
+  return { baseline, level }
+}
