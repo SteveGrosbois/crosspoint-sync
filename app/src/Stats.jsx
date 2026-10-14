@@ -4,28 +4,11 @@ import ShareSheet from './ShareSheet.jsx'
 import { renderCalendarCard, renderStatsCard } from './shareCard.js'
 import { Card, Cover, EmptyState, Eyebrow, ProgressBar, ViaHardcover, duration, pct } from './ui.jsx'
 import { isPace, moodEmoji } from './moods.js'
+import { decodeHistory, localDay, readingStreak } from './readingHistory.js'
+
+export { decodeHistory } from './readingHistory.js'
 
 const WEEKS = 52 // phones show the newest 26
-const EPOCH = Date.UTC(2000, 0, 1)
-
-// history_b64: bit N (LSB-first per byte) = anchor_day - N, anchor_day = days since 2000-01-01.
-export function decodeHistory(b64, anchorDay, readingDays = []) {
-  const bytes = Uint8Array.from(atob(b64 || ''), (ch) => ch.charCodeAt(0))
-  const extra = new Set(readingDays)
-  const today = localDay(new Date())
-  const latest = readingDays.filter((day) => day <= today).sort().at(-1)
-  const original = EPOCH + anchorDay * 86400000
-  const anchor = new Date(Math.max(original, latest ? Date.parse(`${latest}T00:00:00Z`) : original))
-  const shift = (anchor.getTime() - original) / 86400000
-  const read = (n) => {
-    if (n < 0) return false
-    const day = new Date(anchor.getTime() - n * 86400000).toISOString().slice(0, 10)
-    const bit = n - shift
-    return extra.has(day) || (bit >= 0 && bit < bytes.length * 8 && ((bytes[bit >> 3] >> (bit & 7)) & 1) === 1)
-  }
-  const anchorRow = (anchor.getUTCDay() + 6) % 7 // Monday = 0
-  return { read, anchor, anchorRow }
-}
 
 // A tooltip for grid cells carrying data-tip: follows the mouse on hover, and on
 // touch shows while a finger is held down (sliding across cells updates it).
@@ -39,7 +22,7 @@ function useCellTip() {
     const r = cell.getBoundingClientRect()
     const x = r.left + r.width / 2 - outer.left
     // Keep the bubble inside the card near the edges.
-    setTip({ text: cell.dataset.tip, x: Math.min(Math.max(x, 72), outer.width - 72), y: r.top - outer.top })
+    setTip({ text: cell.dataset.tip, x: Math.min(Math.max(x, 128), outer.width - 128), y: r.top - outer.top })
   }
   const hide = () => setTip(null)
   const handlers = {
@@ -54,7 +37,7 @@ function useCellTip() {
   const bubble = tip && (
     <div
       role="tooltip"
-      className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-md bg-stone-900 px-2 py-1 font-mono text-[0.7rem] whitespace-nowrap text-stone-50 shadow-md"
+      className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-full rounded-md bg-stone-900 px-2 py-1 text-center font-mono text-[0.7rem] whitespace-pre text-stone-50 shadow-md"
       style={{ left: tip.x, top: tip.y - 6 }}
     >
       {tip.text}
@@ -79,6 +62,7 @@ const deviceList = (devices) => {
 
 function Heatmap({ summary, activity }) {
   const { read, anchor, anchorRow } = decodeHistory(summary.history_b64, summary.anchor_day, activity?.reading_days)
+  const timeByDay = new Map((summary.daily ?? []).map((day) => [day.date, day.seconds]))
   let days = 0
   for (let n = 0; n < 365; n++) if (read(n)) days++
   const cols = Array.from({ length: WEEKS }, (_, c) =>
@@ -87,7 +71,9 @@ function Heatmap({ summary, activity }) {
   const { box, handlers, bubble } = useCellTip()
   const tipFor = (n) => {
     const d = new Date(anchor.getTime() - n * 86400000)
-    return `${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}: ${read(n) ? 'read' : 'no reading'}`
+    const seconds = timeByDay.get(d.toISOString().slice(0, 10))
+    const label = `${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' })}: ${read(n) ? 'read' : 'no reading'}`
+    return seconds === undefined ? label : `${label}\n${duration(seconds)} reading time`
   }
   return (
     <Card className="mt-4 p-4">
@@ -264,7 +250,6 @@ function Tiles({ tiles, action }) {
 }
 
 const DAY_MS = 86400000
-const localDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
 // Once daily history exists, days without reading count as zero in the 7-day average.
 function dailyReading(daily) {
@@ -662,7 +647,7 @@ function StatsShare({ summary, activity, books, onClose }) {
     ...(daily.length
       ? [
           ['hours read', Math.round(seconds / 3600).toLocaleString()],
-          ['day streak', summary.current_streak],
+          ['day streak', readingStreak(summary, activity)],
         ]
       : [['days read', days.filter((d) => d.pages > 0).length]]),
   ]
@@ -684,7 +669,7 @@ function StatsShare({ summary, activity, books, onClose }) {
     <ShareSheet
       heading="Share your stats"
       meta={meta}
-      renderKey={`${period}-${p.to}-${pages}-${finished.length}-${seconds}-${moods.join()}`}
+      renderKey={`${period}-${p.to}-${pages}-${finished.length}-${seconds}-${readingStreak(summary, activity)}-${moods.join()}`}
       onClose={onClose}
       render={() => renderStatsCard({ heading, tiles, covers, chart, moods })}
     >
@@ -878,7 +863,7 @@ export default function Stats({ session, tab = '', summary, activity, books }) {
           <h2 className="mt-10 font-display text-xl font-semibold text-stone-900">Reading time</h2>
           <Tiles
             tiles={[
-              ['Current streak', `${summary.current_streak} days`],
+              ['Current streak', `${readingStreak(summary, activity)} days`],
               ['Longest streak', `${summary.streak} days`],
               ...(daily
                 ? [

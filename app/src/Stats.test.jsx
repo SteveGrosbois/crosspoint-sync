@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import Stats, { decodeHistory } from './Stats.jsx'
 
 const day = (s) => Date.parse(`${s}T00:00:00Z`)
@@ -76,6 +76,58 @@ describe('daily reading time', () => {
 })
 
 describe('reading grids', () => {
+  it('updates the current streak from the same dates that fill the grid', () => {
+    const summary = {
+      devices: [{ device: 'CrossInk' }], current_streak: 8, streak: 12,
+      seconds: 0, pages: 0, sessions: 0, completed: 0,
+      tod: [0, 0, 0, 0], dow: [0, 0, 0, 0, 0, 0, 0],
+    }
+    const { getByText, rerender, container } = render(<Stats session={{}} books={[]} summary={summary} />)
+    expect(getByText('Current streak').nextElementSibling.textContent).toBe('8 days')
+    const combined = { ...summary, anchor_day: anchorDay('2026-09-28'), history_b64: btoa(String.fromCharCode(1)) }
+    const synced = { books: [], days: [], reading_days: ['2026-09-29', '2026-09-30'] }
+    rerender(<Stats session={{}} books={[]} summary={combined} activity={synced} />)
+    expect(getByText('Current streak').nextElementSibling.textContent).toBe('3 days')
+    expect(container.querySelectorAll('[data-tip$=": read"]').length).toBe(3)
+    expect(getByText('Longest streak').nextElementSibling.textContent).toBe('12 days')
+    rerender(<Stats session={{}} books={[]} summary={combined} activity={{ ...synced, reading_days: [] }} />)
+    expect(getByText('Current streak').nextElementSibling.textContent).toBe('0 days')
+  })
+
+  it('shows recorded daily time on hover and touch without inventing time for other dates', () => {
+    const summary = {
+      devices: [{ device: 'CrossInk' }], history_b64: btoa(String.fromCharCode(7)),
+      anchor_day: anchorDay('2026-09-30'), seconds: 4200, pages: 10, sessions: 1,
+      completed: 0, current_streak: 3, streak: 3,
+      tod: [0, 0, 0, 0], dow: [0, 0, 0, 0, 0, 0, 0],
+      daily: [{ date: '2026-09-30', seconds: 4200 }, { date: '2026-09-29', seconds: 0 }],
+    }
+    const { container, getByRole, queryByRole, rerender } = render(<Stats session={{}} books={[]} summary={summary} />)
+    const cell = (date) => [...container.querySelectorAll('[data-tip]')]
+      .find((el) => el.dataset.tip.startsWith(date))
+    // jsdom does not implement PointerEvent; preserve pointerType for React's handlers.
+    const pointer = (el, type, pointerType) => {
+      const event = new Event(type, { bubbles: true })
+      Object.assign(event, { pointerType })
+      fireEvent(el, event)
+    }
+    pointer(cell('Wed, Sep 30'), 'pointerover', 'mouse')
+    expect(getByRole('tooltip').textContent).toBe('Wed, Sep 30, 2026: read\n1h 10m reading time')
+    pointer(cell('Tue, Sep 29'), 'pointerover', 'mouse')
+    expect(getByRole('tooltip').textContent).toBe('Tue, Sep 29, 2026: read\n0m reading time')
+    pointer(cell('Mon, Sep 28'), 'pointerover', 'mouse')
+    expect(getByRole('tooltip').textContent).toBe('Mon, Sep 28, 2026: read')
+    pointer(cell('Sun, Sep 27'), 'pointerover', 'mouse')
+    expect(getByRole('tooltip').textContent).toBe('Sun, Sep 27, 2026: no reading')
+    pointer(cell('Wed, Sep 30'), 'pointerdown', 'touch')
+    expect(getByRole('tooltip').textContent).toContain('1h 10m reading time')
+    pointer(cell('Wed, Sep 30'), 'pointerup', 'touch')
+    expect(queryByRole('tooltip')).toBeNull()
+    rerender(<Stats session={{}} books={[]} summary={{ ...summary, daily: undefined }} />)
+    pointer(cell('Wed, Sep 30'), 'pointerover', 'mouse')
+    expect(getByRole('tooltip').textContent).toBe('Wed, Sep 30, 2026: read')
+  })
+
   it('adds chosen dates to device history and preserves existing bits when the anchor moves', () => {
     // Device history says Aug 11 was read. Manual finish is Aug 16.
     const history = decodeHistory(btoa(String.fromCharCode(1)), anchorDay('2026-08-11'), activity.reading_days)
