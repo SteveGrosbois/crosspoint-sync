@@ -32,6 +32,11 @@
           document.querySelector('meta[name=theme-color]').setAttribute('content', '#121110')
         }
       } catch (e) {}
+      // Android: follow the system font size by scaling rem (see MainActivity textZoom).
+      try {
+        var scale = window.CrossPointTheme && window.CrossPointTheme.fontScale()
+        if (scale) document.documentElement.style.fontSize = scale * 100 + '%'
+      } catch (e) {}
     </script>
   </head>
   <body class="bg-stone-50">

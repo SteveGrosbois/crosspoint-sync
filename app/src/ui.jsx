@@ -335,7 +335,7 @@ export function EmptyState({ icon: Icon, note, title, children, action, compact 
 /** The pill button used as an empty state's action. */
 export function EmptyAction({ href, onClick, children }) {
   const cls =
-    'inline-flex h-10 items-center gap-1.5 rounded-full bg-brand-500 px-4 text-sm font-semibold text-white transition active:scale-[0.98] md:hover:bg-brand-600'
+    'inline-flex min-h-10 items-center justify-center gap-1.5 rounded-full bg-brand-500 px-4 py-2 text-center text-sm font-semibold text-white transition active:scale-[0.98] md:hover:bg-brand-600'
   return href ? (
     <a href={href} className={cls}>
       {children}
