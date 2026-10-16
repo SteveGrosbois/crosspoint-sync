@@ -27,6 +27,40 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('timeline refresh failures', () => {
+  it('labels saved activity as stale and offers a working retry', () => {
+    const retry = vi.fn()
+    const { getByRole, getByText } = render(<Stats session={{}} tab="timeline" books={[]} activity={activity}
+      activityError={new Error('server failed')} activityLoading={false} onRetryActivity={retry} />)
+    expect(getByRole('status').textContent).toContain('Showing saved activity.')
+    expect(getByRole('status').textContent).not.toContain('Showing data from')
+    expect(getByText('Your timeline starts soon')).toBeTruthy()
+    fireEvent.click(getByRole('button', { name: 'Retry' }))
+    expect(retry).toHaveBeenCalledOnce()
+  })
+
+  it('shows the last successful refresh time for saved activity', () => {
+    const updatedAt = Date.parse('2026-09-29T15:30:00Z')
+    const { getByRole, container } = render(<Stats session={{}} tab="timeline" books={[]} activity={activity}
+      activityError={new Error('offline')} activityUpdatedAt={updatedAt} onRetryActivity={vi.fn()} />)
+    expect(getByRole('status').textContent).toContain('Showing data from')
+    expect(container.querySelector('time').dateTime).toBe('2026-09-29T15:30:00.000Z')
+    expect(container.querySelector('time').textContent).toBe(new Date(updatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }))
+  })
+
+  it('shows initial-load failure without a stuck loading message and clears it on recovery', () => {
+    const props = { session: {}, tab: 'timeline', books: [], onRetryActivity: vi.fn() }
+    const { getByRole, queryByRole, queryByText, rerender } = render(<Stats {...props}
+      activityError={new Error('offline')} activityLoading />)
+    expect(getByRole('alert').textContent).toContain('Reading activity is unavailable.')
+    expect(getByRole('button', { name: 'Retrying…' }).disabled).toBe(true)
+    expect(queryByText('Loading…')).toBeNull()
+    rerender(<Stats {...props} activity={activity} activityError={null} activityLoading={false} />)
+    expect(queryByRole('alert')).toBeNull()
+    expect(queryByRole('status')).toBeNull()
+  })
+})
+
 describe('daily reading time', () => {
   const summary = {
     devices: [{ device: 'CrossInk' }], history_b64: '', anchor_day: anchorDay('2026-09-30'),

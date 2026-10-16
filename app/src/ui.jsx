@@ -101,33 +101,46 @@ export function LoadCacheProvider({ children }) {
   return <LoadCache.Provider value={cache}>{children}</LoadCache.Provider>
 }
 
-export function useLoad(fn, deps, memo, initial) {
+export function useLoad(fn, deps, memo, initial, { retries = 0, reportRefreshErrors = false, initialUpdatedAt } = {}) {
   const remembered = useContext(LoadCache)
   // `initial` (e.g. the saved offline copy) paints right away while fn() refreshes.
-  const [state, setState] = useState(() => ({ data: (memo ? remembered?.get(memo) : null) ?? initial?.() ?? null, error: null }))
+  const [state, setState] = useState(() => ({
+    data: (memo ? remembered?.get(memo) : null) ?? initial?.() ?? null,
+    error: null,
+    updatedAt: initialUpdatedAt?.() ?? null,
+  }))
   const [loading, setLoading] = useState(true)
   const [tick, setTick] = useState(0)
   useEffect(() => {
     let live = true
+    let timer
     setLoading(true)
-    fn()
-      .then(
-        (data) => {
-          if (live) {
-            if (memo) remembered?.set(memo, data)
-            setState({ data, error: null })
-          }
-        },
-        // A failed refresh keeps whatever is already on screen.
-        (error) => live && setState((s) => (s.data ? s : { data: null, error }))
-      )
-      .finally(() => live && setLoading(false))
+    const load = async (attempt = 0) => {
+      try {
+        const data = await fn()
+        if (!live) return
+        if (memo) remembered?.set(memo, data)
+        setState({ data, error: null, updatedAt: Date.now() })
+        setLoading(false)
+      } catch (error) {
+        if (!live) return
+        // Opted-in screens retain saved data while making its stale state visible.
+        setState((s) => (s.data && !reportRefreshErrors ? s : { ...s, error }))
+        if (attempt < retries && error?.status !== 401) {
+          timer = setTimeout(() => load(attempt + 1), 1000 * 2 ** attempt)
+        } else {
+          setLoading(false)
+        }
+      }
+    }
+    load()
     return () => {
       live = false
+      clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, tick])
-  return [state.data, state.error, () => setTick((t) => t + 1), loading]
+  }, [...deps, tick, retries, reportRefreshErrors])
+  return [state.data, state.error, () => setTick((t) => t + 1), loading, state.updatedAt]
 }
 
 export function duration(seconds) {

@@ -842,7 +842,7 @@ function Timeline({ session, activity, books }) {
   )
 }
 
-export default function Stats({ session, tab = '', summary, activity, books }) {
+export default function Stats({ session, tab = '', summary, activity, books, activityError, activityLoading, activityUpdatedAt, onRetryActivity }) {
   const hasTime = summary?.devices?.length > 0
   // Reveal daily tiles and calendar time labels together after any history, even a zero counter.
   const daily = summary?.daily?.length ? dailyReading(summary.daily) : null
@@ -852,13 +852,26 @@ export default function Stats({ session, tab = '', summary, activity, books }) {
       <Eyebrow className="md:hidden">Reading stats</Eyebrow>
       <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-stone-900 md:mt-0 md:flex md:h-11 md:items-center md:text-4xl">How you read</h1>
       <StatsTabs tab={tab} />
+      {activityError && (
+        <div role={activity ? 'status' : 'alert'} className="mt-4 flex items-center gap-3 rounded-lg bg-surface px-3 py-1 text-xs text-stone-500 ring-1 ring-stone-950/10">
+          <p className="min-w-0 flex-1">{activity
+            ? activityUpdatedAt
+              ? <>Showing data from <time dateTime={new Date(activityUpdatedAt).toISOString()}>{new Date(activityUpdatedAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}</time>.</>
+              : 'Showing saved activity.'
+            : 'Reading activity is unavailable.'}</p>
+          <button type="button" onClick={onRetryActivity} disabled={activityLoading}
+            className="min-h-11 shrink-0 rounded-md px-2 font-semibold text-brand-600 disabled:opacity-50">
+            {activityLoading ? 'Retrying…' : 'Retry'}
+          </button>
+        </div>
+      )}
     </>
   )
   if (tab === 'timeline') {
     return (
       <div className="px-4 pt-6 pb-4 md:px-8 md:pt-6 lg:px-12">
         {header}
-        {activity ? <Timeline session={session} activity={activity} books={books} /> : <p className="py-6 text-sm text-stone-500">Loading…</p>}
+        {activity ? <Timeline session={session} activity={activity} books={books} /> : !activityError && <p className="py-6 text-sm text-stone-500">Loading…</p>}
       </div>
     )
   }
@@ -868,7 +881,7 @@ export default function Stats({ session, tab = '', summary, activity, books }) {
       {sharing && <StatsShare summary={summary} activity={activity} books={books} onClose={() => setSharing(false)} />}
 
       <h2 className="mt-8 font-display text-xl font-semibold text-stone-900">Pages &amp; books</h2>
-      {activity ? <PagesAndBooks activity={activity} books={books} onShare={() => setSharing(true)} /> : <p className="py-6 text-sm text-stone-500">Loading…</p>}
+      {activity ? <PagesAndBooks activity={activity} books={books} onShare={() => setSharing(true)} /> : !activityError && <p className="py-6 text-sm text-stone-500">Loading…</p>}
       <WhatYouRead books={books} />
 
       {hasTime ? (
