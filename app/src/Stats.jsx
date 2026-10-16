@@ -736,7 +736,7 @@ const shortDate = (d) =>
 function dayEvent(entry, act, day) {
   const on = (unix) => unix && localDay(new Date(unix * 1000)) === day
   if (on(act?.finished_at)) return { icon: CircleCheck, text: 'Finished' }
-  if (on(act?.started_at) && entry.from <= 0.02) return { icon: BookOpen, text: 'Started reading' }
+  if (entry.started || (on(act?.started_at) && entry.from <= 0.02)) return { icon: BookOpen, text: 'Started reading' }
   const span = entry.to > entry.from ? `${pct(entry.from)} to ${pct(entry.to)}` : `at ${pct(entry.to)}`
   if (entry.pages > 0) return { icon: BookOpen, text: `Read ${entry.pages} page${entry.pages === 1 ? '' : 's'} · ${span}` }
   return { icon: BookOpen, text: entry.to > entry.from ? `Read ${span}` : `Opened ${span}` }
@@ -754,8 +754,25 @@ function Timeline({ session, activity, books }) {
   const byDoc = new Map(books.map((b) => [b.document, b]))
   const acts = new Map(activity.books.map((b) => [b.document, b]))
   const reading = books.filter((b) => b.status === 'reading').sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+  // The first uploaded position is only a baseline. A chosen start date supplies
+  // its timeline event; keep later opens and any actual movement on their days.
+  const firstSyncDays = new Map()
+  for (const d of activity.days) {
+    for (const b of d.books ?? []) {
+      if (b.syncs > 0 && (!firstSyncDays.has(b.document) || d.day < firstSyncDays.get(b.document))) {
+        firstSyncDays.set(b.document, d.day)
+      }
+    }
+  }
+  const startDays = new Map(activity.days.flatMap((d) => (d.books ?? []).filter((b) => b.started).map((b) => [b.document, d.day])))
   const days = activity.days
-    .map((d) => ({ ...d, books: (d.books ?? []).filter((b) => byDoc.has(b.document) && !idleAfterFinish(b, acts.get(b.document), d.day)) }))
+    .map((d) => ({ ...d, books: (d.books ?? []).filter((b) => {
+      const act = acts.get(b.document)
+      const initialUpload = startDays.has(b.document) && firstSyncDays.get(b.document) === d.day &&
+        startDays.get(b.document) !== d.day && b.pages <= 0 && b.to <= b.from &&
+        localDay(new Date((act?.finished_at ?? 0) * 1000)) !== d.day
+      return byDoc.has(b.document) && !initialUpload && !idleAfterFinish(b, act, d.day)
+    }) }))
     .filter((d) => d.books.length)
     .reverse()
 

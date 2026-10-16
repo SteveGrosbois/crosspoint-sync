@@ -27,6 +27,62 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+describe('timeline start dates', () => {
+  const unix = (s) => day(s) / 1000 + 12 * 3600
+  const book = { document: 'a', title: 'Old book', percentage: 0.15 }
+  const baseline = { document: 'a', from: 0.15, to: 0.15, pages: 0, syncs: 1 }
+  const start = (date) => ({ day: date, pages: 0, syncs: 0, books: [{ ...baseline, from: 0, to: 0, syncs: 0, started: true }] })
+  const data = (date, days = []) => ({
+    books: [{ document: 'a', started_at: unix(date), finished_at: null }],
+    days: [start(date), { day: '2026-09-29', pages: 0, syncs: 1, books: [baseline] }, ...days],
+  })
+
+  it('shows a chosen start instead of the initial idle upload and moves it after date edits', () => {
+    const props = { session: {}, tab: 'timeline', books: [book] }
+    const { getByText, queryByText, rerender } = render(<Stats {...props} activity={data('2026-08-11')} />)
+    expect(getByText('Started reading')).toBeTruthy()
+    expect(getByText('Tue, Aug 11')).toBeTruthy()
+    expect(queryByText('Tue, Sep 29')).toBeNull()
+    expect(queryByText('Opened at 15%')).toBeNull()
+    rerender(<Stats {...props} activity={data('2026-08-12')} />)
+    expect(queryByText('Tue, Aug 11')).toBeNull()
+    expect(getByText('Wed, Aug 12')).toBeTruthy()
+  })
+
+  it('keeps later opens and forward progress on their recorded days', () => {
+    const a = data('2026-08-11', [{ day: '2026-09-30', books: [baseline] }])
+    a.days[1].books = [{ ...baseline, to: 0.2, pages: 5 }]
+    const { getByText } = render(<Stats session={{}} tab="timeline" books={[book]} activity={a} />)
+    expect(getByText('Started reading')).toBeTruthy()
+    expect(getByText('Read 5 pages · 15% to 20%')).toBeTruthy()
+    expect(getByText('Opened at 15%')).toBeTruthy()
+  })
+
+  it('keeps the first sync fallback when there is no chosen start date', () => {
+    const a = data('2026-09-29')
+    a.days.shift()
+    const { getByText, queryByText } = render(<Stats session={{}} tab="timeline" books={[book]} activity={a} />)
+    expect(getByText('Opened at 15%')).toBeTruthy()
+    expect(queryByText('Started reading')).toBeNull()
+  })
+
+  it('shows one start event when the chosen start is on the upload day at 15%', () => {
+    const a = data('2026-09-29')
+    a.days = [{ day: '2026-09-29', books: [{ ...baseline, started: true }] }]
+    const { getAllByText, queryByText } = render(<Stats session={{}} tab="timeline" books={[book]} activity={a} />)
+    expect(getAllByText('Started reading')).toHaveLength(1)
+    expect(queryByText('Opened at 15%')).toBeNull()
+  })
+
+  it('preserves a finish event on the first upload day', () => {
+    const a = data('2026-08-11')
+    a.books[0].finished_at = unix('2026-09-29')
+    const { getByText } = render(<Stats session={{}} tab="timeline" books={[book]} activity={a} />)
+    expect(getByText('Started reading')).toBeTruthy()
+    expect(getByText('Finished')).toBeTruthy()
+  })
+})
+
 describe('timeline refresh failures', () => {
   it('labels saved activity as stale and offers a working retry', () => {
     const retry = vi.fn()
