@@ -12,7 +12,7 @@ import {
 } from '../auth/middleware.js';
 import { hashKey, looksLikeMd5, md5Hex } from '../auth/password.js';
 import { parsePosition } from '../models/position.js';
-import { resolveDocument } from '../models/merge.js';
+import { adoptFilenameTwin, resolveDocument } from '../models/merge.js';
 import { nowSeconds } from '../models/sync.js';
 import { nextChangeSeq } from '../models/changes.js';
 import { fanOutProgress } from '../connectors/fanout.js';
@@ -331,7 +331,7 @@ export function parseProgressBody(
  */
 export function writeDeviceProgress(db: DB, record: ProgressUpsert): string {
   const clientDocument = record.document;
-  record.document = resolveDocument(db, record.userId, clientDocument);
+  record.document = adoptFilenameTwin(db, record.userId, clientDocument, record.metadata?.filename ?? null, record.updatedAt);
   upsertProgress(db, record);
   // Harvest this real device position as a (percentage -> position) sample so
   // fan-in can later replay a real position for a percentage-only update.
