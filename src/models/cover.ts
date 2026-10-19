@@ -156,6 +156,9 @@ export async function findBookInfo(
   // `known` (Hardcover's) fills in after the free sources, before the keyed/paid ones.
   const cover = best(title, author, apple, (c) => c.url)?.url ?? best(title, author, ol, (c) => c.url)?.url ?? known.cover ?? null;
   let pages = best(title, author, ol, (c) => c.pages)?.pages ?? known.pages ?? null;
+  // A series prefix ("Game Changers 6: The Long Game") hides the book from Open Library.
+  const short = title.split(': ').slice(1).join(': ');
+  if (!pages && short) pages = best(short, author, await safe(openLibrary(http, short, author)), (c) => c.pages)?.pages ?? null;
   if (!pages && env.GOOGLE_BOOKS_API_KEY) {
     pages = best(title, author, await safe(googleBooks(http, title, author, env.GOOGLE_BOOKS_API_KEY)), (c) => c.pages)?.pages ?? null;
   }

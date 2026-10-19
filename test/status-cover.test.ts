@@ -92,6 +92,16 @@ describe('Amazon page count fallback (SearchAPI)', () => {
     expect((await findBookInfo(http, 'From Below', 'Darcy Coates', {})).pages).toBeNull();
     expect(calls.some((u) => u.includes('searchapi'))).toBe(false);
   });
+
+  it('retries Open Library without a series prefix', async () => {
+    const { findBookInfo } = await import('../src/models/cover.js');
+    const http: HttpTransport = async (url) => {
+      if (url.includes('itunes')) return json({ results: [] });
+      const title = new URL(url).searchParams.get('title');
+      return json({ docs: title === 'The Long Game' ? [{ title: 'The Long Game', author_name: ['Rachel Reid'], number_of_pages_median: 448 }] : [] });
+    };
+    expect((await findBookInfo(http, 'Game Changers 6: The Long Game', 'Rachel Reid', {})).pages).toBe(448);
+  });
 });
 
 describe('manual book info, cover candidates, all clippings', () => {
