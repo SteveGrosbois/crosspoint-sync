@@ -120,7 +120,7 @@ try {
       await frame(browser, w, h, { layout, dev, kick, head, shot: raw(`${tag}-${screen}`), crop: crop && CROPS[tag][crop] }, `${prefix}-${n + 1}-${screen}.png`, scale)
     }
   }
-  const icon = `data:image/svg+xml;base64,${readFileSync(path.join(APP, 'src-tauri/icons/icon-source.svg')).toString('base64')}`
+  const icon = `data:image/svg+xml;base64,${readFileSync(path.join(APP, 'src-tauri/icons/icon-ios.svg')).toString('base64')}`
   await frame(browser, 1024, 500, { layout: 'feature', dev: 'phone', kick: 'Your reading, everywhere', head: 'CrossPoint Sync', shot: raw('phone-library'), icon }, 'feature-graphic.jpg')
   await renderIcon(browser, icon)
   console.log(`Store assets written to ${OUT}`)
