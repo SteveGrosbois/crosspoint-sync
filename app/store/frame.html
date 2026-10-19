@@ -74,7 +74,8 @@ function iosDev(style, height) {
   const u = (n) => `calc(var(--U) * ${n})`
   const bar = s.dev === 'iphone' ? `<div class="sbar"><span>9:41</span><span></span>${ICONS}</div><div class="island"></div>`
     : `<div class="sbar"><span>9:41&ensp;Mon Oct 19</span><span></span>${ICONS}</div>`
-  return `<div class="dev ios ${s.dev}" style="${style}"><div class="scr"${height ? ` style="height:${height}px"` : ''}><img src="${s.shot}">${bar}${height ? '' : '<div class="home"></div>'}</div>${BUTTONS[s.dev](u)}</div>`
+  // height is a cap: a shorter capture shows whole (the home indicator is hidden below if it's cut off).
+  return `<div class="dev ios ${s.dev}" style="${style}"><div class="scr"${height ? ` style="max-height:${height}px"` : ''}><img src="${s.shot}">${bar}<div class="home"></div></div>${BUTTONS[s.dev](u)}</div>`
 }
 const call = (style) => `<div class="call" style="${style};aspect-ratio:${s.crop[2]}/${s.crop[3]}"><img src="${s.shot}"></div>`
 const paper = () => (document.body.className = 'paper', '')
@@ -109,6 +110,7 @@ for (const d of document.querySelectorAll('.ios')) d.style.setProperty('--u', `$
 
 await document.fonts.ready
 await Promise.all([...document.images].map((i) => i.decode()))
+for (const scr of document.querySelectorAll('.ios .scr')) if (scr.clientHeight < scr.firstChild.clientHeight) scr.querySelector('.home').remove()
 // Position each callout's screenshot so only its crop shows, enlarged to the callout's width.
 for (const box of document.querySelectorAll('.call')) {
   const [x, y, w] = s.crop, img = box.firstChild, k = box.clientWidth / w

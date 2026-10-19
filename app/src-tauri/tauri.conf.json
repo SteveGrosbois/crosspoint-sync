@@ -38,7 +38,8 @@
     ],
     "iOS": {
       "minimumSystemVersion": "15.0",
-      "developmentTeam": "96247QW4R8"
+      "developmentTeam": "96247QW4R8",
+      "bundleVersion": "2"
     }
   },
   "plugins": {
