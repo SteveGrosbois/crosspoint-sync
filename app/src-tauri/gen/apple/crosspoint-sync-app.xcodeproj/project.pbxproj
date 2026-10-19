@@ -233,18 +233,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		"TEMP_0BF1C982-F44A-4BEA-B698-966E45BE2B97" /* x86_64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = x86_64;
-			sourceTree = "<group>";
-		};
-		"TEMP_8A207812-13EC-45C6-BDD2-37FA145E419D" /* arm64 */ = {
+		"TEMP_1535F433-45AB-40EB-9F2D-59AB35FBAF55" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
+			sourceTree = "<group>";
+		};
+		"TEMP_63F72141-776A-4E37-897C-28B89EE03343" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -299,6 +299,10 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
+					F1B6382EBA17716854185CF2 = {
+						DevelopmentTeam = 96247QW4R8;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 6A0F362014CA38AA179565C4 /* Build configuration list for PBXProject "crosspoint-sync-app" */;
@@ -390,6 +394,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = CrossPointWidget/CrossPointWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 96247QW4R8;
 				INFOPLIST_FILE = CrossPointWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -410,6 +416,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = CrossPointWidget/CrossPointWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 96247QW4R8;
 				INFOPLIST_FILE = CrossPointWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -454,6 +462,7 @@
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
+				DEVELOPMENT_TEAM = "96247QW4R8";
 			};
 			name = debug;
 		};
@@ -485,6 +494,7 @@
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				VALID_ARCHS = arm64;
+				DEVELOPMENT_TEAM = "96247QW4R8";
 			};
 			name = release;
 		};
