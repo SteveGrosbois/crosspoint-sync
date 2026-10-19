@@ -65,7 +65,7 @@ function Login({ onLogin }) {
   }
 
   return (
-    <div className="flex min-h-dvh flex-col bg-stone-50 md:flex-row">
+    <div className="flex min-h-screen-safe flex-col bg-stone-50 md:flex-row">
       <div className="relative m-3 h-[36dvh] min-h-60 shrink-0 overflow-hidden rounded-[28px] bg-brand-900 md:m-4 md:h-auto md:flex-1">
         <img src={`${import.meta.env.BASE_URL}hero.jpg`} alt="" className="absolute inset-0 size-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-brand-950/95 via-brand-950/40 to-transparent" />
@@ -81,7 +81,7 @@ function Login({ onLogin }) {
 
       <form
         onSubmit={submit}
-        className="flex flex-1 flex-col px-5 pt-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-md md:justify-center md:px-10 lg:max-w-lg lg:px-16"
+        className="flex flex-1 flex-col px-5 pt-4 pb-5 md:max-w-md md:justify-center md:px-10 lg:max-w-lg lg:px-16"
       >
         <h2 className="font-display text-2xl font-semibold text-stone-900">{creating ? 'Create your account' : 'Sign in'}</h2>
         <p className="mt-1 text-sm/6 text-stone-500">
@@ -164,7 +164,7 @@ function Login({ onLogin }) {
 
         {error && <p className="mt-3 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
 
-        <div className="mt-auto pt-6 md:mt-8">
+        <div className="mx-auto mt-auto w-full max-w-sm px-2 pt-6 md:mt-8 md:max-w-none md:px-0">
           <button
             disabled={busy}
             className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 text-base font-semibold text-white shadow-sm transition active:scale-[0.98] active:bg-brand-600 disabled:opacity-60"
@@ -258,7 +258,7 @@ function SettingsLink({ active }) {
 // iPad / desktop: sidebar.
 function Sidebar({ route, session }) {
   return (
-    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-stone-200 bg-surface/60 px-4 py-6 md:flex lg:w-64">
+    <aside className="sticky top-[env(safe-area-inset-top)] hidden h-screen-safe w-60 shrink-0 flex-col border-r border-stone-200 bg-surface/60 px-4 py-6 md:flex lg:w-64">
       {/* 44px band at the top, matching each page's first row (back button / title). */}
       <div className="flex h-11 items-center gap-2.5 px-2">
         <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="size-8 rounded-lg" />
@@ -366,7 +366,7 @@ function Home({ session, onSession, onLogout, theme }) {
   else page = <Library session={session} books={books} summary={summary} activity={activity} />
 
   return (
-    <div className="min-h-dvh md:flex">
+    <div className="min-h-screen-safe md:flex">
       <Sidebar route={route} session={session} />
       <main className="relative mx-auto w-full min-w-0 max-w-xl pb-24 md:max-w-6xl md:pb-10">
         {isOffline && (
@@ -391,7 +391,7 @@ export default function App() {
   useEffect(() => {
     if (!session) clearWidget()
   }, [session])
-  if (!session) return <Login onLogin={setSession} />
+  if (!session) return <Login onLogin={(s) => (window.scrollTo(0, 0), setSession(s))} />
   return (
     <LoadCacheProvider key={JSON.stringify([session.server, session.username])}>
       <Home
