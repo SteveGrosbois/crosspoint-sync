@@ -60,7 +60,7 @@ function BackBar({ back, label }) {
   // Same 44px row as the account avatar so they line up (see Book.jsx).
   useNativeBack(back === 'history' ? () => history.back() : back)
   return (
-    <div className="flex h-11 items-center pr-12 md:pr-0">
+    <div className="mb-4 flex h-11 items-center pr-12 md:mb-0 md:pr-0">
       <a
         href={back}
         onClick={(e) => {

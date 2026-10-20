@@ -16,32 +16,34 @@ const calendarDate = (unix) => date(unix, { timeZone: 'UTC' })
 
 function StatusPicker({ session, book, onChange }) {
   const [busy, setBusy] = useState(null)
+  const [error, setError] = useState(null)
   async function pick(id) {
     setBusy(id)
+    setError(null)
     try {
       await api.setStatus(session, book.document, id)
       onChange()
+    } catch (err) {
+      setError(err.message || "Couldn’t update reading status. Try again.")
     } finally {
       setBusy(null)
     }
   }
   return (
-    <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-      {STATUS.map((s) => (
-        <button
-          key={s.id}
+    <div>
+      <label className="flex min-h-11 items-center justify-between gap-4 border-y border-stone-200 py-2 text-sm text-stone-500">
+        Reading status
+        <select
+          value={book.status}
           disabled={busy !== null}
-          onClick={() => pick(s.id)}
-          className={`flex items-center justify-center gap-2 rounded-md px-3 py-2.5 text-sm font-semibold whitespace-nowrap transition disabled:opacity-60 ${
-            book.status === s.id
-              ? 'bg-brand-500 text-white shadow-sm'
-              : 'bg-surface text-stone-700 shadow-sm ring-1 ring-stone-950/10 active:bg-stone-50'
-          }`}
+          onChange={(e) => pick(e.target.value)}
+          className="min-h-11 max-w-full rounded-lg bg-transparent px-2 text-base font-medium text-brand-700 disabled:opacity-60"
         >
-          <s.icon className="size-4" strokeWidth={2} />
-          {busy === s.id ? '…' : s.label}
-        </button>
-      ))}
+          {STATUS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </label>
+      {busy && <p role="status" className="mt-2 text-sm text-stone-500">Saving status…</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-red-700">{error}</p>}
     </div>
   )
 }
@@ -211,10 +213,10 @@ function Clippings({ session, book }) {
         const heading = c.chapter && c.chapter !== chapter ? (chapter = c.chapter) : null
         return (
           <div key={c.id}>
-            {heading && <p className="mt-5 mb-2 font-mono text-[0.65rem] font-medium tracking-wider text-stone-400 uppercase">{heading}</p>}
-            <Card className="group relative p-4 select-none [-webkit-touch-callout:none] md:select-text" {...hold(() => setDeleting(c))}>
+            {heading && <p className="mt-5 mb-2 text-sm font-medium text-stone-500">{heading}</p>}
+            <article className="group relative border-b border-stone-200 py-5 pr-8 select-none [-webkit-touch-callout:none] md:select-text" {...hold(() => setDeleting(c))}>
               <ClipMenu onDelete={() => setDeleting(c)} />
-              <blockquote className="border-l-2 border-brand-300 pl-3 font-display text-[0.95rem]/relaxed text-stone-800 italic">
+              <blockquote className="font-display text-lg/relaxed text-stone-800">
                 {c.text}
               </blockquote>
               {c.note && <p className="mt-3 font-hand text-lg/6 text-brand-700">{c.note}</p>}
@@ -226,9 +228,9 @@ function Clippings({ session, book }) {
                 >
                   <Share2 className="size-4" /> Share
                 </button>
-                <p className="font-mono text-[0.65rem] text-stone-400">{date(c.created_at)}</p>
+                <p className="text-xs text-stone-500">{date(c.created_at)}</p>
               </div>
-            </Card>
+            </article>
           </div>
         )
       })}
@@ -785,7 +787,7 @@ export default function Book({ session, book, books, activity, back = { href: '#
   if (!book) return <p className="py-16 text-center text-sm text-stone-500">Book not found.</p>
   return (
     <div className="px-4 pt-4 pb-6 md:px-8 md:pt-6 lg:px-12">
-      <div className="-mr-2 flex h-11 items-center">
+      <div className="-mr-2 mb-4 flex h-11 items-center md:mb-0">
         <a
           href={back.href}
           className="native-hide -ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"

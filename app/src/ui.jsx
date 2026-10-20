@@ -9,7 +9,7 @@ export const STATUS = [
   { id: 'dnf', label: 'Did Not Finish', icon: CircleX },
 ]
 
-// Handwritten margin-note eyebrow, same as crosspoint-tools ui.jsx.
+// Handwritten margin-note eyebrow, shared across screens.
 export function Eyebrow({ children, className = '' }) {
   return (
     <p className={`inline-block -rotate-1 font-hand text-xl/6 font-medium text-brand-600 ${className}`}>
@@ -305,7 +305,7 @@ export function ViaHardcover({ slug, inline = false }) {
 
 // ---- Empty states ------------------------------------------------------------
 // A little shelf: two tilted spines with the state's icon between them, a
-// handwritten margin note, a title, one line of help and the next useful action.
+// contextual note, a title, one line of help and the next useful action.
 export function EmptyState({ icon: Icon, note, title, children, action, compact = false }) {
   if (compact) {
     return (
@@ -336,7 +336,7 @@ export function EmptyState({ icon: Icon, note, title, children, action, compact 
             </span>
           )}
         </div>
-        {note && <p className="mt-5 -rotate-1 font-hand text-xl text-brand-600">{note}</p>}
+        {note && <p className="mt-5 text-sm text-stone-500">{note}</p>}
         <p className={`${note ? 'mt-1' : 'mt-5'} font-display text-xl font-semibold text-stone-900`}>{title}</p>
         {children && <p className="mx-auto mt-2 max-w-sm text-sm/6 text-stone-500">{children}</p>}
         {action && <div className="mt-5 flex justify-center">{action}</div>}

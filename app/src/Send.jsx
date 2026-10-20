@@ -22,7 +22,7 @@ import {
 import { isApp } from './api.js'
 import { DEFAULT_HOST, EXTENSIONS, connect, deleteFiles, folders, isBook, joinPath, listFiles, loadDevicePrefs, makeFolder, renameFile, saveDevicePrefs } from './device.js'
 import { downloads as listDownloads, removeDownload, sendDownload, sendFile } from './catalogs.js'
-import { Card, EmptyState, Eyebrow, folderLabel, notify, Toggle } from './ui.jsx'
+import { Card, EmptyState, folderLabel, notify, Toggle } from './ui.jsx'
 
 const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
 // Android's picker filters by MIME type and has none for .md, so let it show everything there.
@@ -64,97 +64,100 @@ function Device({ prefs, setPrefs, device, onRetry }) {
         </button>
       </div>
 
-      <div className="mt-4 grid gap-3 border-t border-stone-100 pt-4 sm:grid-cols-2">
-        <label className="block text-xs font-medium text-stone-500">
-          Save to folder
-          <div className="mt-1 flex h-11 items-center gap-2 rounded-xl bg-stone-50 px-3 ring-1 ring-stone-950/10">
-            <Folder className="size-4 text-stone-400" />
-            <select
-              value={prefs.folder}
-              onChange={(e) => setPrefs({ ...prefs, folder: e.target.value })}
-              className="h-full min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none"
-            >
-              {[...new Set(['/', ...dirs.map((d) => `/${d}`), prefs.folder])].map((f) => (
-                <option key={f} value={f}>
-                  {f === '/' ? 'SD card (top level)' : f}
-                </option>
-              ))}
-            </select>
-          </div>
-        </label>
-        <div className="text-xs font-medium text-stone-500">
-          Reader address
-          {editing ? (
-            <form
-              className="mt-1 flex gap-2"
-              onSubmit={(e) => {
-                e.preventDefault()
-                setPrefs({ ...prefs, host: host.trim() || DEFAULT_HOST })
-                setEditing(false)
-              }}
-            >
-              <input
-                autoFocus
-                value={host}
-                onChange={(e) => setHost(e.target.value)}
-                placeholder="crosspoint.local or 192.168.1.40"
-                inputMode="url"
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                className="h-11 min-w-0 flex-1 rounded-xl bg-surface px-3 text-sm text-stone-900 ring-1 ring-stone-950/10 outline-none focus:ring-2 focus:ring-brand-500/60"
-              />
-              <button className="h-11 rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white">Save</button>
-            </form>
-          ) : (
-            <button
-              onClick={() => setEditing(true)}
-              className="mt-1 flex h-11 w-full items-center justify-between rounded-xl bg-stone-50 px-3 font-mono text-sm text-stone-700 ring-1 ring-stone-950/10"
-            >
-              {prefs.host}
-              <span className="font-sans text-xs font-semibold text-brand-600">Change</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      <div className="mt-4 border-t border-stone-100 pt-4">
-        <div className="flex items-center gap-3">
-          <ImageDown className="size-5 shrink-0 text-stone-400" strokeWidth={1.75} />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-stone-900">Shrink EPUB images</p>
-            <p className="text-xs/5 text-stone-500">Re-encodes pictures as JPEG so books take less space and open faster.</p>
-          </div>
-          <Toggle label="Shrink EPUB images" checked={prefs.optimize} onChange={(optimize) => setPrefs({ ...prefs, optimize })} />
-        </div>
-        {prefs.optimize && (
-          <label className="mt-3 flex items-center gap-3 pl-8 text-xs text-stone-500">
-            Quality
-            <input
-              type="range"
-              min="30"
-              max="95"
-              step="5"
-              value={prefs.quality}
-              onChange={(e) => setPrefs({ ...prefs, quality: Number(e.target.value) })}
-              className="flex-1 accent-brand-500"
-            />
-            <span className="w-8 text-right font-mono text-stone-700">{prefs.quality}</span>
+      <details className="mt-3 border-t border-stone-200">
+        <summary className="cursor-pointer py-3 text-sm font-medium text-stone-600">Transfer settings · {folderLabel(prefs.folder)}</summary>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <label className="block text-xs font-medium text-stone-500">
+            Save to folder
+            <div className="mt-1 flex h-11 items-center gap-2 rounded-xl bg-stone-50 px-3 ring-1 ring-stone-950/10">
+              <Folder className="size-4 text-stone-400" />
+              <select
+                value={prefs.folder}
+                onChange={(e) => setPrefs({ ...prefs, folder: e.target.value })}
+                className="h-full min-w-0 flex-1 bg-transparent text-sm text-stone-900 outline-none"
+              >
+                {[...new Set(['/', ...dirs.map((d) => `/${d}`), prefs.folder])].map((f) => (
+                  <option key={f} value={f}>
+                    {f === '/' ? 'SD card (top level)' : f}
+                  </option>
+                ))}
+              </select>
+            </div>
           </label>
-        )}
-        <div className="mt-4 flex items-center gap-3">
-          <FilePen className="size-5 shrink-0 text-stone-400" strokeWidth={1.75} />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-stone-900">Rename from book metadata</p>
-            <p className="text-xs/5 text-stone-500">Use Title - Author.epub when available.</p>
+          <div className="text-xs font-medium text-stone-500">
+            Reader address
+            {editing ? (
+              <form
+                className="mt-1 flex gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  setPrefs({ ...prefs, host: host.trim() || DEFAULT_HOST })
+                  setEditing(false)
+                }}
+              >
+                <input
+                  autoFocus
+                  value={host}
+                  onChange={(e) => setHost(e.target.value)}
+                  placeholder="crosspoint.local or 192.168.1.40"
+                  inputMode="url"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  className="h-11 min-w-0 flex-1 rounded-xl bg-surface px-3 text-sm text-stone-900 ring-1 ring-stone-950/10 outline-none focus:ring-2 focus:ring-brand-500/60"
+                />
+                <button className="h-11 rounded-xl bg-brand-500 px-4 text-sm font-semibold text-white">Save</button>
+              </form>
+            ) : (
+              <button
+                onClick={() => setEditing(true)}
+                className="mt-1 flex h-11 w-full items-center justify-between rounded-xl bg-stone-50 px-3 font-mono text-sm text-stone-700 ring-1 ring-stone-950/10"
+              >
+                {prefs.host}
+                <span className="font-sans text-xs font-semibold text-brand-600">Change</span>
+              </button>
+            )}
           </div>
-          <Toggle
-            label="Rename from book metadata"
-            checked={prefs.renameFromMetadata}
-            onChange={(renameFromMetadata) => setPrefs({ ...prefs, renameFromMetadata })}
-          />
         </div>
-      </div>
+
+        <div className="mt-4 border-t border-stone-100 pt-4">
+          <div className="flex items-center gap-3">
+            <ImageDown className="size-5 shrink-0 text-stone-400" strokeWidth={1.75} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-stone-900">Shrink EPUB images</p>
+              <p className="text-xs/5 text-stone-500">Re-encodes pictures as JPEG so books take less space and open faster.</p>
+            </div>
+            <Toggle label="Shrink EPUB images" checked={prefs.optimize} onChange={(optimize) => setPrefs({ ...prefs, optimize })} />
+          </div>
+          {prefs.optimize && (
+            <label className="mt-3 flex items-center gap-3 pl-8 text-xs text-stone-500">
+              Quality
+              <input
+                type="range"
+                min="30"
+                max="95"
+                step="5"
+                value={prefs.quality}
+                onChange={(e) => setPrefs({ ...prefs, quality: Number(e.target.value) })}
+                className="flex-1 accent-brand-500"
+              />
+              <span className="w-8 text-right font-mono text-stone-700">{prefs.quality}</span>
+            </label>
+          )}
+          <div className="mt-4 flex items-center gap-3">
+            <FilePen className="size-5 shrink-0 text-stone-400" strokeWidth={1.75} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-stone-900">Rename from book metadata</p>
+              <p className="text-xs/5 text-stone-500">Use Title - Author.epub when available.</p>
+            </div>
+            <Toggle
+              label="Rename from book metadata"
+              checked={prefs.renameFromMetadata}
+              onChange={(renameFromMetadata) => setPrefs({ ...prefs, renameFromMetadata })}
+            />
+          </div>
+        </div>
+      </details>
     </Card>
   )
 }
@@ -434,25 +437,10 @@ export default function Send() {
 
   return (
     <div className="px-4 pt-6 pb-4 md:px-8 md:pt-6 lg:px-12">
-      <Eyebrow className="md:hidden">Send to reader</Eyebrow>
       <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-stone-900 md:mt-0 md:flex md:h-11 md:items-center md:text-4xl">Send books</h1>
       <p className="mt-2 max-w-xl text-sm/6 text-stone-500">
-        Copy EPUB, Markdown and text files to your CrossPoint over Wi-Fi, from this device or from catalogs in Browse.
+        Send EPUB, Markdown or text files over Wi-Fi.
       </p>
-
-      <a
-        href="#/send/wallpaper"
-        className="mt-5 flex max-w-xl items-center gap-3 rounded-xl bg-surface px-4 py-3 shadow-sm ring-1 ring-stone-950/5 transition active:scale-[0.99] md:hover:bg-stone-50"
-      >
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
-          <ImagePlus className="size-5" strokeWidth={1.75} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-semibold text-stone-900">Make a sleep screen</span>
-          <span className="block truncate text-xs text-stone-500">Turn a photo into a wallpaper for your reader</span>
-        </span>
-        <ChevronRight className="size-5 text-stone-400" />
-      </a>
 
       {!isApp ? (
         <Card className="mt-6 p-4 text-sm/6 text-stone-600">
@@ -546,6 +534,19 @@ export default function Send() {
           </div>
         </div>
       )}
+      <a
+        href="#/send/wallpaper"
+        className="mt-5 flex max-w-xl items-center gap-3 rounded-xl bg-surface px-4 py-3 shadow-sm ring-1 ring-stone-950/5 transition active:scale-[0.99] md:hover:bg-stone-50"
+      >
+        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
+          <ImagePlus className="size-5" strokeWidth={1.75} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-stone-900">Make a sleep screen</span>
+          <span className="block truncate text-xs text-stone-500">Turn a photo into a wallpaper for your reader</span>
+        </span>
+        <ChevronRight className="size-5 text-stone-400" />
+      </a>
     </div>
   )
 }

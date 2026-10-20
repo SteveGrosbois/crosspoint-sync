@@ -2,7 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react'
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, CircleCheck, Share2 } from 'lucide-react'
 import ShareSheet from './ShareSheet.jsx'
 import { renderCalendarCard, renderStatsCard } from './shareCard.js'
-import { Card, Cover, EmptyState, Eyebrow, ProgressBar, ViaHardcover, duration, pct } from './ui.jsx'
+import { Card, Cover, EmptyState, ProgressBar, ViaHardcover, duration, pct } from './ui.jsx'
 import { isPace, moodEmoji } from './moods.js'
 import { decodeHistory, localDay, longestReadingStreak, readingStreak, shadeLevels } from './readingHistory.js'
 
@@ -866,7 +866,6 @@ export default function Stats({ session, tab = '', summary, activity, books, act
   const [sharing, setSharing] = useState(false)
   const header = (
     <>
-      <Eyebrow className="md:hidden">Reading stats</Eyebrow>
       <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-stone-900 md:mt-0 md:flex md:h-11 md:items-center md:text-4xl">How you read</h1>
       <StatsTabs tab={tab} />
       {activityError && (

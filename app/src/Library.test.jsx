@@ -25,11 +25,11 @@ describe('Library completion updates', () => {
     expect(getByText('day streak').previousElementSibling.textContent).toBe('1')
   })
 
-  it('replaces the Continue reading book when its finished status arrives', () => {
-    const { container, getByRole, getByText, rerender } = render(
+  it('shows every in-progress book as a reading card and removes completed books', () => {
+    const { container, getByRole, getByText, getAllByText, rerender } = render(
       <Library session={session} books={[{ ...finished, status: 'reading' }, reading]} />,
     )
-    expect(getByText('Continue reading').closest('a').getAttribute('href')).toBe('#/book/finished')
+    expect(getAllByText('Continue reading').map((label) => label.closest('a').getAttribute('href'))).toEqual(['#/book/finished', '#/book/reading'])
 
     rerender(<Library session={session} books={[finished, reading]} />)
     expect(getByText('Continue reading').closest('a').getAttribute('href')).toBe('#/book/reading')

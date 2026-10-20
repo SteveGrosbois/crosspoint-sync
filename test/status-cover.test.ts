@@ -61,6 +61,12 @@ describe('covers, page counts and activity', () => {
     const act = await (await app.request('/api/v1/stats/activity', { headers })).json();
     expect(act.books[0]).toMatchObject({ document: DOC, page_count: 500, pages_read: 250, finished_at: null });
     expect(act.days.reduce((n: number, d: { pages: number }) => n + d.pages, 0)).toBe(107); // (0.5 - 0.2853) * 500
+
+    // Another user with the same book reuses the lookup: no new requests.
+    const other = await registerUser(app, 'reader2');
+    await app.request('/syncs/progress', { method: 'PUT', headers: other.headers, body: JSON.stringify(PUT_BODY) });
+    expect(await (await app.request(`/api/v1/documents/${DOC}/cover`, { headers: other.headers })).json()).toEqual(want);
+    expect(calls).toHaveLength(2);
   });
 });
 

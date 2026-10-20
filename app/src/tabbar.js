@@ -10,6 +10,7 @@ import {
   selectTab,
   showTabBar,
 } from '@sosweetham/tauri-plugin-system-components-api'
+import { invoke } from '@tauri-apps/api/core'
 import { isApp } from './api.js'
 
 // iPhone app: a real UITabBar over the webview (Liquid Glass on iOS 26) replaces the
@@ -23,8 +24,13 @@ if (nativeTabBar) document.documentElement.classList.add('native-chrome')
 const wide = nativeTabBar && matchMedia('(min-width: 768px)')
 let sheets = 0
 const sync = () => {
-  // Android: no pull-to-refresh while a sheet scrolls (see MainActivity).
-  window.CrossPointRefresh?.setEnabled(sheets === 0)
+  // The page behind an open sheet stays put: CSS for the web and Android's scroll,
+  // the native scroll view on iOS (its bounce and pull-to-refresh ignore the CSS),
+  // and Android's pull-to-refresh (see MainActivity).
+  const open = sheets > 0
+  document.documentElement.style.overflow = open ? 'hidden' : ''
+  if (isApp) invoke('set_page_scroll', { enabled: !open }).catch(() => {})
+  window.CrossPointRefresh?.setEnabled(!open)
   if (!nativeTabBar) return
   const hidden = wide.matches || sheets > 0
   ;(hidden ? hideTabBar() : showTabBar()).catch(() => {})

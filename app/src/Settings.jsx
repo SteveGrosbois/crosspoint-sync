@@ -4,7 +4,7 @@ import { onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import { ArrowLeft, ChevronRight, Copy, KeyRound, ListChecks, Loader2, LogOut, Monitor, Moon, RefreshCw, Search, Server, Sun, Trash2, UserX } from 'lucide-react'
 import SparkMD5 from 'spark-md5'
 import { api, isApp } from './api.js'
-import { Bone, Card, EmptyState, Eyebrow, notify, Toggle, useLoad } from './ui.jsx'
+import { Bone, Card, EmptyState, notify, Toggle, useLoad } from './ui.jsx'
 import { useNativeBack } from './tabbar.js'
 
 // Appearance: follow the system, or force light or dark.
@@ -701,12 +701,17 @@ function Account({ session, onSession, onLogout }) {
 }
 
 export default function Settings({ session, theme, onSession, onLogout }) {
+  useNativeBack('#/')
   const host = new URL(session.server).host
   const section = 'mt-8 font-display text-xl font-semibold text-stone-900'
   return (
-    <div className="max-w-2xl px-4 pt-6 pb-8 md:px-8 md:pt-6 lg:px-12">
-      <Eyebrow className="md:hidden">Your account</Eyebrow>
-      <h1 className="mt-1 font-display text-3xl font-semibold tracking-tight text-stone-900 md:mt-0 md:flex md:h-11 md:items-center md:text-4xl">Settings</h1>
+    <div className="settings-page max-w-2xl px-4 pt-2 pb-8 md:px-8 md:pt-6 lg:px-12">
+      <div className="settings-header flex min-h-11 items-center gap-6">
+        <a href="#/" aria-label="Back to Library" className="native-hide grid size-11 shrink-0 place-items-center rounded-full text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100">
+          <ArrowLeft className="size-6" strokeWidth={2} />
+        </a>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900 md:text-4xl">Settings</h1>
+      </div>
 
       <Card className="mt-6 flex items-center gap-3 p-4">
         <div className="grid size-11 shrink-0 place-items-center rounded-full bg-brand-50 font-display text-lg font-semibold text-brand-700">
@@ -766,7 +771,7 @@ export function Matches({ session, id }) {
 
   return (
     <div className="max-w-2xl px-4 pt-6 pb-8 md:px-8 md:pt-6 lg:px-12">
-      <a href="#/settings" className="native-hide inline-flex items-center gap-1.5 text-sm font-medium text-stone-500">
+      <a href="#/settings" className="native-hide mb-4 inline-flex h-11 items-center gap-1.5 text-sm font-medium text-stone-500 md:mb-0">
         <ArrowLeft className="size-4" /> Settings
       </a>
       <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-stone-900 md:text-4xl">{name} matches</h1>

@@ -37,6 +37,7 @@ pub fn run() {
       books::save_file,
       widget::update_widget,
       set_appearance,
+      set_page_scroll,
       refresh::end_refresh,
     ])
     .run(tauri::generate_context!())
@@ -44,8 +45,7 @@ pub fn run() {
 }
 
 // iOS scroll view: wry turns off bounce, but native apps rubber-band (even on pages too
-// short to scroll). The status bar area is the scroll view's top inset, painted in the
-// page colour by set_appearance; UIRefreshControl positions itself below that inset.
+// short to scroll).
 #[cfg(target_os = "ios")]
 fn native_scroll(app: &tauri::App) -> tauri::Result<()> {
   use tauri::Manager;
@@ -57,6 +57,24 @@ fn native_scroll(app: &tauri::App) -> tauri::Result<()> {
     let _: () = msg_send![scroll, setBounces: true];
     let _: () = msg_send![scroll, setAlwaysBounceVertical: true];
   })
+}
+
+// iOS: the page's scroll view stops scrolling (and bouncing, and pulling to refresh)
+// while a sheet is open. The sheet's own scroller is a separate view, unaffected.
+#[tauri::command]
+fn set_page_scroll(window: tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
+  #[cfg(target_os = "ios")]
+  window
+    .with_webview(move |webview| unsafe {
+      use objc2::{msg_send, runtime::AnyObject};
+      let view = &*(webview.inner() as *const AnyObject);
+      let scroll: *mut AnyObject = msg_send![view, scrollView];
+      let _: () = msg_send![scroll, setScrollEnabled: enabled];
+    })
+    .map_err(|e| e.to_string())?;
+  #[cfg(not(target_os = "ios"))]
+  let _ = (window, enabled);
+  Ok(())
 }
 
 // The in-app Appearance choice for native UI on iOS: status bar text, the tab bar,

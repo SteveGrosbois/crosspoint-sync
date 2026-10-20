@@ -332,7 +332,7 @@ export default function Wallpaper() {
 
   return (
     <div className="px-4 pt-6 pb-4 md:px-8 md:pt-6 lg:px-12">
-      <div className="flex h-11 items-center">
+      <div className="mb-4 flex h-11 items-center md:mb-0">
         <a
           href="#/send"
           className="native-hide -ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"

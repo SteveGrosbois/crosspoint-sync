@@ -159,5 +159,10 @@ body::before {
 /* iPhone app: native glass buttons replace these (tabbar.js). Hidden, not removed,
    so the rows they sat in keep their height. */
 .native-chrome .native-hide { visibility: hidden; }
+/* Native buttons add a 16px plugin margin to tabbar.js's dx=12 / dy=8. */
+@media (width < 48rem) {
+  .native-chrome .settings-page { padding-top: 24px; }
+  .native-chrome .settings-header { padding-left: 12px; }
+}
 /* The ⋯ menu drops from its pinned native button, wherever the page has scrolled. */
 .native-chrome .native-menu { position: fixed; top: calc(env(safe-area-inset-top) + 3.75rem); right: 0.75rem; }

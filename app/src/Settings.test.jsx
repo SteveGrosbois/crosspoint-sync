@@ -13,7 +13,9 @@ vi.mock('@tauri-apps/plugin-deep-link', () => ({ onOpenUrl: vi.fn(async (fn) => 
 
 const { api } = await import('./api.js')
 const { openUrl } = await import('@tauri-apps/plugin-opener')
-const { LinkForm } = await import('./Settings.jsx')
+const { default: Settings, LinkForm } = await import('./Settings.jsx')
+vi.mock('./tabbar.js', async (orig) => ({ ...(await orig()), useNativeBack: vi.fn() }))
+const { useNativeBack } = await import('./tabbar.js')
 vi.mock('./ui.jsx', async (orig) => ({ ...(await orig()), notify: vi.fn() }))
 
 const session = { server: 'https://sync.test' }
@@ -161,4 +163,13 @@ describe('Spotify Client ID setup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Use your own Spotify app' }))
     expect(screen.getByText('Create an app')).toBeTruthy()
   })
+})
+
+
+it('Settings provides a Library back destination for both native and HTML navigation', async () => {
+  api.connectors.mockResolvedValue({ connectors: [] })
+  render(<Settings session={{ ...session, username: 'reader' }} theme={['system', vi.fn()]} onSession={vi.fn()} onLogout={vi.fn()} />)
+  expect(screen.getByRole('link', { name: 'Back to Library' }).getAttribute('href')).toBe('#/')
+  expect(useNativeBack).toHaveBeenCalledWith('#/')
+  await waitFor(() => expect(api.connectors).toHaveBeenCalled())
 })
