@@ -380,7 +380,7 @@ function Home({ session, onSession, onLogout, theme }) {
       <Sidebar route={route} session={session} />
       <main className="relative mx-auto w-full min-w-0 max-w-xl pb-24 md:max-w-6xl md:pb-10">
         {isOffline && (
-          <div className="sticky top-0 z-30 flex items-center justify-center gap-2 bg-stone-800 px-4 py-2 text-xs font-medium text-stone-100">
+          <div className="sticky top-[env(safe-area-inset-top)] z-30 flex items-center justify-center gap-2 bg-stone-800 px-4 py-2 text-xs font-medium text-stone-100">
             <CloudOff className="size-3.5" /> Offline. Showing what was saved on this device.
           </div>
         )}

@@ -703,6 +703,7 @@ dependencies = [
  "anyhow",
  "base64 0.22.1",
  "image",
+ "objc2",
  "objc2-foundation",
  "objc2-ui-kit",
  "quick-xml 0.39.4",
