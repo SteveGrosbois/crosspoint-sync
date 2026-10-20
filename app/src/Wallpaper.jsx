@@ -5,6 +5,7 @@ import { reader, sendFile } from './catalogs.js'
 import { folders, loadDevicePrefs, makeFolder } from './device.js'
 import { saveImage } from './shareCard.js'
 import { Card, EmptyState, Eyebrow, notify } from './ui.jsx'
+import { useNativeBack } from './tabbar.js'
 import { CATEGORIES, canFilter, communityPage, fullImage } from './wallpaper/community.js'
 import { DEFAULTS, DEVICES, DITHERS, autoLevels, placement, renderWallpaper, toBmp } from './wallpaper/render.js'
 
@@ -186,6 +187,7 @@ function Community({ onPick }) {
 const baseName = (name) => name.replace(/\.[^.]+$/, '').replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'wallpaper'
 
 export default function Wallpaper() {
+  useNativeBack('#/send')
   const [img, setImg] = useState(null) // { el, name }
   const [s, setS] = useState(loadPrefs)
   const [auto, setAuto] = useState(false)
@@ -333,7 +335,7 @@ export default function Wallpaper() {
       <div className="flex h-11 items-center">
         <a
           href="#/send"
-          className="-ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
+          className="native-hide -ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
         >
           <ArrowLeft className="size-6" strokeWidth={2} /> Send
         </a>

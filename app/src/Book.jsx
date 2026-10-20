@@ -4,7 +4,7 @@ import { api, isApp } from './api.js'
 import { renderCard } from './shareCard.js'
 import { isPace, moodEmoji } from './moods.js'
 import ShareSheet from './ShareSheet.jsx'
-import { useHideTabBar } from './tabbar.js'
+import { useSheet, useNativeBack, useNativeButton } from './tabbar.js'
 import SpotifyCard from './SpotifyCard.jsx'
 import { Picker } from './Settings.jsx'
 import { STATUS, Card, Cover, EmptyState, ErrorNote, ProgressBar, Spinner, ViaHardcover, ago, duration, notify, pct, useLoad } from './ui.jsx'
@@ -255,11 +255,11 @@ export const looksLikeSame = (a, b) =>
   a.document !== b.document && norm(a.title) && norm(a.title) === norm(b.title) && (!a.author || !b.author || norm(a.author) === norm(b.author))
 
 function Sheet({ title, onClose, children }) {
-  useHideTabBar()
+  useSheet()
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
       <div className="absolute inset-0 bg-stone-950/40" onClick={onClose} />
-      <div className="relative max-h-[88dvh] w-full overflow-y-auto rounded-t-[28px] bg-stone-50 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-lg md:rounded-[28px] md:p-6">
+      <div className="relative max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-[28px] bg-stone-50 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-lg md:rounded-[28px] md:p-6">
         <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-stone-300 md:hidden" />
         <button onClick={onClose} className="absolute top-3 right-3 grid size-10 place-items-center rounded-full text-stone-500 active:bg-stone-200" aria-label="Close">
           <X className="size-5" />
@@ -516,6 +516,7 @@ function DetailsSheet({ session, book, onDone, onClose }) {
 
 function BookMenu({ session, book, books, activity, onChange }) {
   const [menu, setMenu] = useState(false)
+  useNativeButton('more', { sfSymbol: 'ellipsis', anchor: 'topTrailing' }, () => setMenu((m) => !m))
   const [open, setOpen] = useState(null) // 'cover' | 'details' | 'pages' | 'dates' | 'merge'
   const [pages, setPages] = useState(book.page_count ?? '')
   const [saving, setSaving] = useState(false)
@@ -574,14 +575,14 @@ function BookMenu({ session, book, books, activity, onChange }) {
         aria-haspopup="menu"
         aria-expanded={menu}
         onClick={() => setMenu(!menu)}
-        className="grid size-11 place-items-center rounded-full text-stone-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
+        className="native-hide grid size-11 place-items-center rounded-full text-stone-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
       >
         <MoreHorizontal className="size-6" />
       </button>
       {menu && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
-          <div role="menu" className="absolute top-12 right-0 z-30 w-64 divide-y divide-stone-100 overflow-hidden rounded-xl bg-surface shadow-lg ring-1 ring-stone-950/10">
+          <div role="menu" className="native-menu absolute top-12 right-0 z-30 w-64 divide-y divide-stone-100 overflow-hidden rounded-xl bg-surface shadow-lg ring-1 ring-stone-950/10">
             {item(PenLine, 'Edit title & author', () => setOpen('details'))}
             {item(ImageIcon, 'Change cover', () => setOpen('cover'))}
             {item(CalendarDays, 'Reading dates', () => setOpen('dates'))}
@@ -780,13 +781,14 @@ const seriesLabel = (b) =>
 
 export default function Book({ session, book, books, activity, back = { href: '#/', label: 'Library' }, onChange }) {
   const wide = useWide()
+  useNativeBack(back.href)
   if (!book) return <p className="py-16 text-center text-sm text-stone-500">Book not found.</p>
   return (
     <div className="px-4 pt-4 pb-6 md:px-8 md:pt-6 lg:px-12">
       <div className="-mr-2 flex h-11 items-center">
         <a
           href={back.href}
-          className="-ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
+          className="native-hide -ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
         >
           <ArrowLeft className="size-6" strokeWidth={2} /> {back.label}
         </a>

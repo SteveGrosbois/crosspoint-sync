@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { invoke } from '@tauri-apps/api/core'
 import { ChartColumn, CloudOff, Compass, Quote, Eye, EyeOff, LibraryBig, Loader2, Lock, Send as SendIcon, Server, Settings as SettingsIcon, User } from 'lucide-react'
 import { useTheme } from './theme.js'
 import { DEFAULT_SERVER, api, hostedServer, isApp, lastServer, loadSession, login, logout, offline, cached, register, saveSession } from './api.js'
@@ -13,7 +14,7 @@ import Browse from './Browse.jsx'
 import Clippings from './Clippings.jsx'
 import { clearWidget, updateWidget } from './widget.js'
 import InstallPrompt from './Install.jsx'
-import { mountTabBar, nativeTabBar, selectNativeTab } from './tabbar.js'
+import { mountTabBar, nativeTabBar, selectNativeTab, useNativeButton } from './tabbar.js'
 
 // A filled, full-width field with a leading icon: the native mobile idiom.
 function Field({ icon: Icon, trailing, inputRef, ...props }) {
@@ -222,6 +223,11 @@ const NAV = [
   ...(isApp ? [{ href: '#/send', label: 'Send', icon: SendIcon, sf: 'paperplane', active: (r) => r === 'send' }] : []),
 ]
 
+function endRefresh() {
+  window.CrossPointRefresh?.done() // Android
+  if (isApp) invoke('end_refresh').catch(() => {}) // iOS
+}
+
 // Phone: bottom tab bar (native on iPhone, see tabbar.js).
 function TabBar({ route }) {
   const current = NAV.find((n) => n.active(route))?.href
@@ -249,16 +255,14 @@ function TabBar({ route }) {
   )
 }
 
-// Phone: settings gear top right, opening the Settings page.
-function SettingsLink({ active }) {
+// Phone: settings gear top right of the Library, opening the Settings page.
+function SettingsLink() {
+  useNativeButton('settings', { sfSymbol: 'gearshape', anchor: 'topTrailing' }, () => (location.hash = '#/settings'))
   return (
     <a
       href="#/settings"
       aria-label="Settings"
-      aria-current={active ? 'page' : undefined}
-      className={`absolute top-4 right-3 z-20 grid size-11 place-items-center rounded-full active:bg-stone-200/70 md:hidden ${
-        active ? 'text-brand-600' : 'text-stone-600'
-      }`}
+      className="native-hide absolute top-4 right-3 z-20 grid size-11 place-items-center rounded-full text-stone-600 active:bg-stone-200/70 md:hidden"
     >
       <SettingsIcon className="size-6" strokeWidth={1.75} />
     </a>
@@ -349,6 +353,32 @@ function Home({ session, onSession, onLogout, theme }) {
     return () => document.removeEventListener('visibilitychange', on)
   })
 
+  // Native pull-to-refresh (iOS refresh control, Android SwipeRefreshLayout): reload
+  // everything, then let the spinner go once the books are back.
+  const [pulling, setPulling] = useState(false)
+  const sawLoading = useRef(false)
+  useEffect(() => {
+    const on = () => {
+      sawLoading.current = false
+      setPulling(true)
+      reloadBooks()
+      reloadSummary()
+      reloadActivity()
+    }
+    addEventListener('crosspoint-refresh', on)
+    return () => removeEventListener('crosspoint-refresh', on)
+  })
+  useEffect(() => {
+    if (!pulling) return
+    if (booksLoading) sawLoading.current = true
+    else if (sawLoading.current) setPulling(false)
+  }, [pulling, booksLoading])
+  useEffect(() => {
+    if (!pulling) return endRefresh()
+    const t = setTimeout(() => setPulling(false), 15000) // never leave it spinning
+    return () => clearTimeout(t)
+  }, [pulling])
+
   let page
   if (route === 'settings') page = id ? <Matches session={session} id={id} /> : <Settings session={session} theme={theme} onSession={onSession} onLogout={onLogout} />
   else if (route === 'send' && isApp) page = id === 'wallpaper' ? <Wallpaper /> : <Send />
@@ -384,9 +414,9 @@ function Home({ session, onSession, onLogout, theme }) {
             <CloudOff className="size-3.5" /> Offline. Showing what was saved on this device.
           </div>
         )}
-        {/* Sub-screens (a book, a service's matches, a catalog...) have a back link instead. Stats' second segment is just its tab. */}
-        {(parts.length < 2 || route === 'stats') && <SettingsLink active={route === 'settings'} />}
-        <RefreshPill active={booksLoading && !!books} />
+        {/* Settings opens from the Library only; sub-screens have a back link instead. */}
+        {parts.length < 2 && NAV[0].active(route) && <SettingsLink />}
+        <RefreshPill active={booksLoading && !!books && !pulling} />
         <Toaster />
         {page}
       </main>

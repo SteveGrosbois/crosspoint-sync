@@ -5,6 +5,7 @@ import { loadDevicePrefs } from './device.js'
 import { download, feed as fetchFeed, loadCatalogs, navRows, readable, saveCatalogs, search, sendDownload } from './catalogs.js'
 import { progressLabel } from './Send.jsx'
 import { Card, EmptyAction, EmptyState, Eyebrow, Spinner, folderLabel, notify } from './ui.jsx'
+import { useNativeBack } from './tabbar.js'
 
 // Hash routes:
 //   #/browse                         storefront: a block of rails per catalog
@@ -55,8 +56,9 @@ const openBook = (cat) => (entry) => {
   location.hash = href(cat, 'b', key)
 }
 
-function TopBar({ back, label }) {
+function BackBar({ back, label }) {
   // Same 44px row as the account avatar so they line up (see Book.jsx).
+  useNativeBack(back === 'history' ? () => history.back() : back)
   return (
     <div className="flex h-11 items-center pr-12 md:pr-0">
       <a
@@ -67,7 +69,7 @@ function TopBar({ back, label }) {
             history.back()
           }
         }}
-        className="-ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
+        className="native-hide -ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
       >
         <ArrowLeft className="size-6" strokeWidth={2} /> {label}
       </a>
@@ -210,7 +212,7 @@ function BookPage({ cat, entryKey }) {
   if (!entry) {
     return (
       <div className="px-4 pt-4 md:px-8 md:pt-6 lg:px-12">
-        <TopBar back={href(cat)} label={cat.name} />
+        <BackBar back={href(cat)} label={cat.name} />
         <p className="py-16 text-center text-sm text-stone-500">Open this book again from the catalog.</p>
       </div>
     )
@@ -243,7 +245,7 @@ function BookPage({ cat, entryKey }) {
 
   return (
     <div className="px-4 pt-4 pb-8 md:px-8 md:pt-6 lg:px-12">
-      <TopBar back="history" label="Back" />
+      <BackBar back="history" label="Back" />
       <div className="mt-3 md:grid md:grid-cols-[15rem_1fr] md:items-start md:gap-10 lg:grid-cols-[18rem_1fr] lg:gap-14">
         <aside className="md:sticky md:top-8">
           <Cover entry={entry} large className="mx-auto w-44 shadow-lg md:w-full" />
@@ -503,7 +505,7 @@ function SearchAll({ catalogs, query }) {
   }, [catalogs, query])
   return (
     <div className="px-4 pt-4 pb-4 md:px-8 md:pt-6 lg:px-12">
-      <TopBar back="#/browse" label="Browse" />
+      <BackBar back="#/browse" label="Browse" />
       <SearchBox value={query} placeholder="Search all catalogs" onSubmit={searchAll} />
       {catalogs.map((c) => {
         const r = results[c.id]
@@ -557,7 +559,7 @@ function FeedView({ cat, url, query }) {
 
   return (
     <div className="px-4 pt-4 pb-6 md:px-8 md:pt-6 lg:px-12">
-      <TopBar back={url || query ? 'history' : '#/browse'} label={url || query ? 'Back' : 'Browse'} />
+      <BackBar back={url || query ? 'history' : '#/browse'} label={url || query ? 'Back' : 'Browse'} />
       <h1 className="mt-2 font-display text-3xl/tight font-semibold tracking-tight text-stone-900">
         {query ? `“${query}”` : (feed?.title ?? cat.name)}
       </h1>
@@ -696,7 +698,7 @@ function Manage({ catalogs, setCatalogs }) {
   }
   return (
     <div className="px-4 pt-4 pb-4 md:px-8 md:pt-6 lg:px-12">
-      <TopBar back="history" label="Back" />
+      <BackBar back="history" label="Back" />
       <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-900">Catalogs</h1>
       <p className="mt-2 max-w-xl text-sm/6 text-stone-500">OPDS catalogs: public libraries like Project Gutenberg, or your own Calibre, Kavita or Mayberry server.</p>
 

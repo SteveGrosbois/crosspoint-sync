@@ -155,3 +155,9 @@ body::before {
   .cp-loader { animation: cp-pulse 1.6s ease-in-out infinite; }
   @keyframes cp-pulse { 50% { opacity: 0.45; } }
 }
+
+/* iPhone app: native glass buttons replace these (tabbar.js). Hidden, not removed,
+   so the rows they sat in keep their height. */
+.native-chrome .native-hide { visibility: hidden; }
+/* The ⋯ menu drops from its pinned native button, wherever the page has scrolled. */
+.native-chrome .native-menu { position: fixed; top: calc(env(safe-area-inset-top) + 3.75rem); right: 0.75rem; }

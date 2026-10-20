@@ -5,6 +5,7 @@ import { ArrowLeft, ChevronRight, Copy, KeyRound, ListChecks, Loader2, LogOut, M
 import SparkMD5 from 'spark-md5'
 import { api, isApp } from './api.js'
 import { Bone, Card, EmptyState, Eyebrow, notify, Toggle, useLoad } from './ui.jsx'
+import { useNativeBack } from './tabbar.js'
 
 // Appearance: follow the system, or force light or dark.
 const THEMES = [
@@ -756,6 +757,7 @@ export default function Settings({ session, theme, onSession, onLogout }) {
 // One service's matches: which book there each synced title maps to. Fix wrong
 // ones, pick one for books that didn't match, or stop syncing a book.
 export function Matches({ session, id }) {
+  useNativeBack('#/settings')
   const [conns] = useLoad(() => api.connectors(session), [session], `connectors ${session.username}@${session.server}`)
   const [books, error, reload] = useLoad(() => api.review(session, id), [session, id])
   const [picking, setPicking] = useState(null)
@@ -764,7 +766,7 @@ export function Matches({ session, id }) {
 
   return (
     <div className="max-w-2xl px-4 pt-6 pb-8 md:px-8 md:pt-6 lg:px-12">
-      <a href="#/settings" className="inline-flex items-center gap-1.5 text-sm font-medium text-stone-500">
+      <a href="#/settings" className="native-hide inline-flex items-center gap-1.5 text-sm font-medium text-stone-500">
         <ArrowLeft className="size-4" /> Settings
       </a>
       <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-stone-900 md:text-4xl">{name} matches</h1>

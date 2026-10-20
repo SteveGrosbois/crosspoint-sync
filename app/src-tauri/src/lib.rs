@@ -3,6 +3,7 @@ mod epub_name;
 mod mdns;
 mod opds;
 mod optimizer;
+mod refresh;
 mod widget;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -19,7 +20,9 @@ pub fn run() {
     .plugin(tauri_plugin_system_components::init())
     .setup(|_app| {
       #[cfg(target_os = "ios")]
-      restore_bounce(_app)?;
+      native_scroll(_app)?;
+      #[cfg(target_os = "ios")]
+      refresh::install(_app)?;
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -34,15 +37,17 @@ pub fn run() {
       books::save_file,
       widget::update_widget,
       set_appearance,
+      refresh::end_refresh,
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
 }
 
-// wry turns off the WKWebView's scroll bounce on iOS. Native apps rubber-band, even
-// on pages too short to scroll, so turn it back on.
+// iOS scroll view: wry turns off bounce, but native apps rubber-band (even on pages too
+// short to scroll). The status bar area is the scroll view's top inset, painted in the
+// page colour by set_appearance; UIRefreshControl positions itself below that inset.
 #[cfg(target_os = "ios")]
-fn restore_bounce(app: &tauri::App) -> tauri::Result<()> {
+fn native_scroll(app: &tauri::App) -> tauri::Result<()> {
   use tauri::Manager;
   let Some(window) = app.get_webview_window("main") else { return Ok(()) };
   window.with_webview(|webview| unsafe {
@@ -56,22 +61,31 @@ fn restore_bounce(app: &tauri::App) -> tauri::Result<()> {
 
 // The in-app Appearance choice for native UI on iOS: status bar text, the tab bar,
 // the keyboard. Tauri's setTheme doesn't reach iOS. "light" | "dark" | "system".
+// Also paints the native backdrop (window, webview, overscroll) in the page colour.
 #[tauri::command]
-fn set_appearance(window: tauri::WebviewWindow, pref: String) -> Result<(), String> {
+fn set_appearance(window: tauri::WebviewWindow, pref: String, dark: bool) -> Result<(), String> {
   #[cfg(target_os = "ios")]
   window
     .with_webview(move |webview| unsafe {
-      use objc2::{msg_send, runtime::AnyObject};
+      use objc2::{class, msg_send, runtime::AnyObject};
       let view = &*(webview.inner() as *const AnyObject);
       let win: *mut AnyObject = msg_send![view, window];
+      // theme.js PAGE: #fafaf9 light, #121110 dark.
+      let (r, g, b) = if dark { (0x12, 0x11, 0x10) } else { (0xfa, 0xfa, 0xf9) };
+      let page: *mut AnyObject = msg_send![class!(UIColor), colorWithRed: r as f64 / 255.0, green: g as f64 / 255.0, blue: b as f64 / 255.0, alpha: 1.0f64];
+      let _: () = msg_send![view, setBackgroundColor: page];
+      let _: () = msg_send![view, setUnderPageBackgroundColor: page];
+      let scroll: *mut AnyObject = msg_send![view, scrollView];
+      let _: () = msg_send![scroll, setBackgroundColor: page];
       // UIUserInterfaceStyle: 0 unspecified (follow the system), 1 light, 2 dark.
       let style: isize = match pref.as_str() { "light" => 1, "dark" => 2, _ => 0 };
       if !win.is_null() {
         let _: () = msg_send![win, setOverrideUserInterfaceStyle: style];
+        let _: () = msg_send![win, setBackgroundColor: page];
       }
     })
     .map_err(|e| e.to_string())?;
   #[cfg(not(target_os = "ios"))]
-  let _ = (window, pref);
+  let _ = (window, pref, dark);
   Ok(())
 }

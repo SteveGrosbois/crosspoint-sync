@@ -27,7 +27,7 @@ export function applyTheme(pref) {
   // Android: status/nav bars, WebView background and the next launch's splash.
   window.CrossPointTheme?.apply(pref, dark)
   // iOS: status bar text, native tab bar and keyboard (no-op elsewhere).
-  if (isApp) invoke('set_appearance', { pref }).catch(() => {})
+  if (isApp) invoke('set_appearance', { pref, dark }).catch(() => {})
 }
 
 export function useTheme() {
