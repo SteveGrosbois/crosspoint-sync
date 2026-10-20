@@ -61,6 +61,7 @@
 		4D9B295417CA01F08FBEAF53 /* feed.rs */ = {isa = PBXFileReference; path = feed.rs; sourceTree = "<group>"; };
 		5B97ABE31780B7A6C5CAD74D /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		6A1455ECBA39E1ACC7E634A5 /* widget.rs */ = {isa = PBXFileReference; path = widget.rs; sourceTree = "<group>"; };
+		725351A937E063D1D025CF2A /* refresh.rs */ = {isa = PBXFileReference; path = refresh.rs; sourceTree = "<group>"; };
 		72ED45BA68D8C2F5A99C542D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		75F208D74C3164B18C8AFAE5 /* mdns.rs */ = {isa = PBXFileReference; path = mdns.rs; sourceTree = "<group>"; };
 		7CC754790240CD99815BE1B6 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
@@ -129,6 +130,7 @@
 				4AE2C3E46EF866376181162A /* main.rs */,
 				75F208D74C3164B18C8AFAE5 /* mdns.rs */,
 				ED7B9C55E7A2791B84DE7114 /* optimizer.rs */,
+				725351A937E063D1D025CF2A /* refresh.rs */,
 				6A1455ECBA39E1ACC7E634A5 /* widget.rs */,
 				C1BB4D8BDB160ADDCC937AC4 /* opds */,
 			);
@@ -233,18 +235,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		"TEMP_377613C7-A237-4058-A68E-C8D4E4E325B6" /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
-		"TEMP_E6271704-4497-4BDC-AE78-E6DBD7B318DB" /* x86_64 */ = {
+		"TEMP_AC3F16AB-C6B7-4C0B-ADFA-1C09D7E7F714" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = x86_64;
+			sourceTree = "<group>";
+		};
+		"TEMP_EC7D1D87-13BB-412F-B37E-0E21099DEAE7" /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = arm64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
