@@ -8,6 +8,7 @@
   "permissions": [
     "core:default",
     "deep-link:default",
+    "system-components:default",
     {
       "identifier": "http:default",
       "allow": [

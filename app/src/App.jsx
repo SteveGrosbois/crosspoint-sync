@@ -13,6 +13,7 @@ import Browse from './Browse.jsx'
 import Clippings from './Clippings.jsx'
 import { clearWidget, updateWidget } from './widget.js'
 import InstallPrompt from './Install.jsx'
+import { mountTabBar, nativeTabBar, selectNativeTab } from './tabbar.js'
 
 // A filled, full-width field with a leading icon: the native mobile idiom.
 function Field({ icon: Icon, trailing, inputRef, ...props }) {
@@ -213,16 +214,25 @@ const BACK_LABELS = { stats: 'Stats', clippings: 'Clippings', browse: 'Browse', 
 const backTo = (hash) => ({ href: hash, label: BACK_LABELS[hash.replace(/^#\/?/, '').split('/')[0]] ?? 'Library' })
 
 const NAV = [
-  { href: '#/', label: 'Library', icon: LibraryBig, active: (r) => !['stats', 'send', 'browse', 'clippings', 'settings'].includes(r) },
+  { href: '#/', label: 'Library', icon: LibraryBig, sf: 'books.vertical', active: (r) => !['stats', 'send', 'browse', 'clippings', 'settings'].includes(r) },
   // Browse and Send need the app (catalog access and the reader on your Wi-Fi), so the web leaves them out.
-  ...(isApp ? [{ href: '#/browse', label: 'Browse', icon: Compass, active: (r) => r === 'browse' }] : []),
-  { href: '#/clippings', label: 'Clippings', icon: Quote, active: (r) => r === 'clippings' },
-  { href: '#/stats', label: 'Stats', icon: ChartColumn, active: (r) => r === 'stats' },
-  ...(isApp ? [{ href: '#/send', label: 'Send', icon: SendIcon, active: (r) => r === 'send' }] : []),
+  ...(isApp ? [{ href: '#/browse', label: 'Browse', icon: Compass, sf: 'safari', active: (r) => r === 'browse' }] : []),
+  { href: '#/clippings', label: 'Clippings', icon: Quote, sf: 'quote.opening', active: (r) => r === 'clippings' },
+  { href: '#/stats', label: 'Stats', icon: ChartColumn, sf: 'chart.bar', active: (r) => r === 'stats' },
+  ...(isApp ? [{ href: '#/send', label: 'Send', icon: SendIcon, sf: 'paperplane', active: (r) => r === 'send' }] : []),
 ]
 
-// Phone: bottom tab bar.
+// Phone: bottom tab bar (native on iPhone, see tabbar.js).
 function TabBar({ route }) {
+  const current = NAV.find((n) => n.active(route))?.href
+  useEffect(() => {
+    if (nativeTabBar) return mountTabBar(NAV.map((n) => ({ id: n.href, title: n.label, sfSymbol: n.sf })), current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  useEffect(() => {
+    if (nativeTabBar && current) selectNativeTab(current)
+  }, [current])
+  if (nativeTabBar) return null
   const cls = (active) =>
     `flex flex-1 flex-col items-center gap-0.5 pt-2 pb-1.5 text-[0.7rem] font-semibold ${active ? 'text-brand-600' : 'text-stone-500'}`
   return (

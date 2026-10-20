@@ -28,6 +28,8 @@ tokio = { version = "1", features = ["time"] }
 tauri-plugin-opener = "2"
 # https app links back from browser sign-in.
 tauri-plugin-deep-link = "2"
+# Native Liquid Glass tab bar on iPhone (stubs elsewhere). One-person 0.x crate: pinned.
+tauri-plugin-system-components = "=0.1.8"
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2-foundation = { version = "0.3", features = ["NSData", "NSFileManager", "NSString", "NSURL"] }

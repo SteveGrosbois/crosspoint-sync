@@ -15,6 +15,8 @@ pub fn run() {
     .plugin(tauri_plugin_opener::init())
     // https app links back from browser sign-in (OAuth callbacks).
     .plugin(tauri_plugin_deep_link::init())
+    // Native UITabBar over the webview on iPhone (Liquid Glass on iOS 26).
+    .plugin(tauri_plugin_system_components::init())
     .invoke_handler(tauri::generate_handler![
       mdns::resolve_local,
       books::opds_feed,

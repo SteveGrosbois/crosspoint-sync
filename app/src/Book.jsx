@@ -4,6 +4,7 @@ import { api, isApp } from './api.js'
 import { renderCard } from './shareCard.js'
 import { isPace, moodEmoji } from './moods.js'
 import ShareSheet from './ShareSheet.jsx'
+import { useHideTabBar } from './tabbar.js'
 import SpotifyCard from './SpotifyCard.jsx'
 import { Picker } from './Settings.jsx'
 import { STATUS, Card, Cover, EmptyState, ErrorNote, ProgressBar, Spinner, ViaHardcover, ago, duration, notify, pct, useLoad } from './ui.jsx'
@@ -254,6 +255,7 @@ export const looksLikeSame = (a, b) =>
   a.document !== b.document && norm(a.title) && norm(a.title) === norm(b.title) && (!a.author || !b.author || norm(a.author) === norm(b.author))
 
 function Sheet({ title, onClose, children }) {
+  useHideTabBar()
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
       <div className="absolute inset-0 bg-stone-950/40" onClick={onClose} />

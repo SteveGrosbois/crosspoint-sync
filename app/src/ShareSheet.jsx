@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { Copy, Download, Share2, X } from 'lucide-react'
 import { PLATFORMS, canShareNatively, copyImage, postTo, saveImage, shareNatively } from './shareCard.js'
 import { Spinner } from './ui.jsx'
+import { useHideTabBar } from './tabbar.js'
 
 // Preview a generated share card, then share it natively, copy/save it, or post it
 // (desktop). Used for clippings and the stats card.
 export default function ShareSheet({ heading, meta, render, renderKey, onClose, children }) {
   const [card, setCard] = useState(null) // { blob, url }
   const [status, setStatus] = useState(null)
+  useHideTabBar()
 
   useEffect(() => {
     let url
