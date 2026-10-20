@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { ArrowLeft, BookOpen, ChevronRight, Download, Loader2, Pencil, Plus, Search, Send as SendIcon, Server, Trash2 } from 'lucide-react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { impactFeedback, selectionFeedback } from '@tauri-apps/plugin-haptics'
+import { ArrowLeft, BookOpen, ChevronRight, Download, GripVertical, Loader2, Pencil, Plus, Search, Send as SendIcon, Server, Trash2 } from 'lucide-react'
 import { isApp } from './api.js'
 import { loadDevicePrefs } from './device.js'
-import { download, feed as fetchFeed, loadCatalogs, navRows, readable, saveCatalogs, search, sendDownload } from './catalogs.js'
+import { download, feed as fetchFeed, loadCatalogs, moveCatalog, navRows, readable, saveCatalogs, search, sendDownload } from './catalogs.js'
 import { progressLabel } from './Send.jsx'
 import { Card, EmptyAction, EmptyState, Eyebrow, Spinner, folderLabel, notify } from './ui.jsx'
 import { useNativeBack } from './tabbar.js'
@@ -60,7 +61,7 @@ function BackBar({ back, label }) {
   // Same 44px row as the account avatar so they line up (see Book.jsx).
   useNativeBack(back === 'history' ? () => history.back() : back)
   return (
-    <div className="mb-4 flex h-11 items-center pr-12 md:mb-0 md:pr-0">
+    <div className="mb-6 flex h-11 items-center pr-12 md:mb-0 md:pr-0">
       <a
         href={back}
         onClick={(e) => {
@@ -211,7 +212,7 @@ function BookPage({ cat, entryKey }) {
 
   if (!entry) {
     return (
-      <div className="px-4 pt-4 md:px-8 md:pt-6 lg:px-12">
+      <div className="px-4 pt-6 md:px-8 md:pt-6 lg:px-12">
         <BackBar back={href(cat)} label={cat.name} />
         <p className="py-16 text-center text-sm text-stone-500">Open this book again from the catalog.</p>
       </div>
@@ -244,7 +245,7 @@ function BookPage({ cat, entryKey }) {
   const facts = [entry.published?.slice(0, 4), entry.language?.toUpperCase(), cat.name].filter(Boolean)
 
   return (
-    <div className="px-4 pt-4 pb-8 md:px-8 md:pt-6 lg:px-12">
+    <div className="px-4 pt-6 pb-8 md:px-8 md:pt-6 lg:px-12">
       <BackBar back="history" label="Back" />
       <div className="mt-3 md:grid md:grid-cols-[15rem_1fr] md:items-start md:gap-10 lg:grid-cols-[18rem_1fr] lg:gap-14">
         <aside className="md:sticky md:top-8">
@@ -504,7 +505,7 @@ function SearchAll({ catalogs, query }) {
     }
   }, [catalogs, query])
   return (
-    <div className="px-4 pt-4 pb-4 md:px-8 md:pt-6 lg:px-12">
+    <div className="px-4 pt-6 pb-4 md:px-8 md:pt-6 lg:px-12">
       <BackBar back="#/browse" label="Browse" />
       <SearchBox value={query} placeholder="Search all catalogs" onSubmit={searchAll} />
       {catalogs.map((c) => {
@@ -558,7 +559,7 @@ function FeedView({ cat, url, query }) {
   const open = openBook(cat)
 
   return (
-    <div className="px-4 pt-4 pb-6 md:px-8 md:pt-6 lg:px-12">
+    <div className="px-4 pt-6 pb-6 md:px-8 md:pt-6 lg:px-12">
       <BackBar back={url || query ? 'history' : '#/browse'} label={url || query ? 'Back' : 'Browse'} />
       <h1 className="mt-2 font-display text-3xl/tight font-semibold tracking-tight text-stone-900">
         {query ? `“${query}”` : (feed?.title ?? cat.name)}
@@ -690,14 +691,92 @@ function CatalogForm({ initial, onSave, onCancel }) {
   )
 }
 
+// Haptics need the app (iOS/Android); elsewhere the call just fails quietly.
+const haptic = (fn) => isApp && fn().catch(() => {})
+
 function Manage({ catalogs, setCatalogs }) {
   const [editing, setEditing] = useState(catalogs.length ? null : 'new') // catalog | 'new' | null
   const save = (cat) => {
     setCatalogs(catalogs.some((c) => c.id === cat.id) ? catalogs.map((c) => (c.id === cat.id ? cat : c)) : [...catalogs, cat])
     setEditing(null)
   }
+  // Drag a card by its grip to reorder (Browse lists catalogs in this order). Pointer
+  // events, not HTML drag and drop, which touch WebKit doesn't do reliably. The card
+  // follows the finger; the others slide into their new slots (FLIP).
+  const [dragging, setDragging] = useState(null) // catalog id
+  const cards = useRef(new Map()) // id -> element
+  const grab = useRef(null) // { id, dx, dy (finger within card), tx, ty (card's offset), x, y (finger) }
+  const before = useRef(null) // id -> rect, just before a swap
+
+  // Keep the dragged card under the finger, wherever its slot is now.
+  const follow = () => {
+    const g = grab.current
+    const el = g && cards.current.get(g.id)
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    g.tx = g.x - g.dx - (r.left - g.tx)
+    g.ty = g.y - g.dy - (r.top - g.ty)
+    el.style.transform = `translate(${g.tx}px, ${g.ty}px)`
+  }
+
+  const dragStart = (e, id) => {
+    const r = cards.current.get(id).getBoundingClientRect()
+    e.currentTarget.setPointerCapture(e.pointerId)
+    grab.current = { id, dx: e.clientX - r.left, dy: e.clientY - r.top, tx: 0, ty: 0, x: e.clientX, y: e.clientY }
+    setDragging(id)
+    haptic(() => impactFeedback('medium'))
+  }
+
+  const dragMove = (e) => {
+    const g = grab.current
+    if (!g) return
+    g.x = e.clientX
+    g.y = e.clientY
+    follow()
+    const others = [...cards.current].filter(([id]) => id !== g.id)
+    // Hit-test layout slots (offset*), not on-screen rects: a card still sliding away
+    // from a swap would otherwise be under the finger again and swap straight back.
+    const over = others.find(([, el]) => {
+      const p = el.offsetParent.getBoundingClientRect()
+      const x = g.x - p.left
+      const y = g.y - p.top
+      return x >= el.offsetLeft && x <= el.offsetLeft + el.offsetWidth && y >= el.offsetTop && y <= el.offsetTop + el.offsetHeight
+    })?.[0]
+    if (!over) return
+    before.current = new Map(others.map(([id, el]) => [id, el.getBoundingClientRect()]))
+    setCatalogs(moveCatalog(catalogs, g.id, over))
+    haptic(selectionFeedback)
+  }
+
+  const dragEnd = () => {
+    const el = grab.current && cards.current.get(grab.current.id)
+    grab.current = null
+    setDragging(null)
+    if (!el) return
+    el.animate([{ transform: el.style.transform }, { transform: 'none' }], { duration: 180, easing: 'ease-out' })
+    el.style.transform = ''
+    haptic(() => impactFeedback('light'))
+  }
+
+  // After a swap: slide each moved card from where it was, and re-pin the dragged one.
+  useLayoutEffect(() => {
+    const was = before.current
+    before.current = null
+    if (!was) return
+    follow()
+    for (const [id, old] of was) {
+      const el = cards.current.get(id)
+      el?.getAnimations().forEach((a) => a.cancel()) // measure the slot, not a slide in progress
+      const now = el?.getBoundingClientRect()
+      if (!now || (old.left === now.left && old.top === now.top)) continue
+      el.animate([{ transform: `translate(${old.left - now.left}px, ${old.top - now.top}px)` }, { transform: 'none' }], {
+        duration: 220,
+        easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      })
+    }
+  }, [catalogs])
   return (
-    <div className="px-4 pt-4 pb-4 md:px-8 md:pt-6 lg:px-12">
+    <div className="px-4 pt-6 pb-4 md:px-8 md:pt-6 lg:px-12">
       <BackBar back="history" label="Back" />
       <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-stone-900">Catalogs</h1>
       <p className="mt-2 max-w-xl text-sm/6 text-stone-500">OPDS catalogs: public libraries like Project Gutenberg, or your own Calibre, Kavita or Mayberry server.</p>
@@ -709,7 +788,23 @@ function Manage({ catalogs, setCatalogs }) {
               <CatalogForm initial={c} onSave={save} onCancel={() => setEditing(null)} />
             </Card>
           ) : (
-            <Card key={c.id} className="flex items-center gap-3 p-2 pl-4">
+            <Card
+              key={c.id}
+              ref={(el) => (el ? cards.current.set(c.id, el) : cards.current.delete(c.id))}
+              className={`flex items-center gap-3 p-2 transition-shadow ${catalogs.length > 1 ? 'pl-0' : 'pl-4'} ${dragging === c.id ? 'relative z-10 shadow-lg ring-2 ring-brand-500/60' : ''}`}
+            >
+              {catalogs.length > 1 && (
+                <button
+                  aria-label={`Drag to reorder ${c.name}`}
+                  onPointerDown={(e) => dragStart(e, c.id)}
+                  onPointerMove={dragMove}
+                  onPointerUp={dragEnd}
+                  onPointerCancel={dragEnd}
+                  className="-mr-2 grid h-11 w-9 shrink-0 cursor-grab touch-none place-items-center text-stone-400 active:cursor-grabbing"
+                >
+                  <GripVertical className="size-5" />
+                </button>
+              )}
               <a href={href(c)} className="flex min-w-0 flex-1 items-center gap-3 py-2">
                 <div className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
                   <Server className="size-5" />

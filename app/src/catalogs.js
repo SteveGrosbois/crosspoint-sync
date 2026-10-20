@@ -15,6 +15,14 @@ export function loadCatalogs() {
   }
 }
 
+// The list with the catalog `fromId` moved to where `toId` is.
+export function moveCatalog(list, fromId, toId) {
+  const next = [...list]
+  const to = next.findIndex((c) => c.id === toId)
+  next.splice(to, 0, ...next.splice(next.findIndex((c) => c.id === fromId), 1))
+  return next
+}
+
 export function saveCatalogs(list) {
   try {
     localStorage.setItem(KEY, JSON.stringify(list))

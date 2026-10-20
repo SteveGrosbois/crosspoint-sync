@@ -771,10 +771,12 @@ export function Matches({ session, id }) {
 
   return (
     <div className="max-w-2xl px-4 pt-6 pb-8 md:px-8 md:pt-6 lg:px-12">
-      <a href="#/settings" className="native-hide mb-4 inline-flex h-11 items-center gap-1.5 text-sm font-medium text-stone-500 md:mb-0">
-        <ArrowLeft className="size-4" /> Settings
-      </a>
-      <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight text-stone-900 md:text-4xl">{name} matches</h1>
+      <div className="mb-6 flex h-11 items-center md:mb-0">
+        <a href="#/settings" className="native-hide flex h-11 items-center gap-1.5 text-sm font-medium text-stone-500">
+          <ArrowLeft className="size-4" /> Settings
+        </a>
+      </div>
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-stone-900 md:mt-3 md:text-4xl">{name} matches</h1>
       <p className="mt-1 text-sm/6 text-stone-500">Which book on {name} each title you read maps to. Fix any that matched wrong.</p>
 
       {error && !books ? (

@@ -786,8 +786,8 @@ export default function Book({ session, book, books, activity, back = { href: '#
   useNativeBack(back.href)
   if (!book) return <p className="py-16 text-center text-sm text-stone-500">Book not found.</p>
   return (
-    <div className="px-4 pt-4 pb-6 md:px-8 md:pt-6 lg:px-12">
-      <div className="-mr-2 mb-4 flex h-11 items-center md:mb-0">
+    <div className="px-4 pt-6 pb-6 md:px-8 md:pt-6 lg:px-12">
+      <div className="-mr-2 mb-6 flex h-11 items-center md:mb-0">
         <a
           href={back.href}
           className="native-hide -ml-2 flex h-11 items-center gap-1.5 rounded-full pr-4 pl-2 text-lg font-semibold text-brand-600 transition active:bg-stone-200/70 md:hover:bg-stone-100"
@@ -800,7 +800,7 @@ export default function Book({ session, book, books, activity, back = { href: '#
       <div className="md:mt-4">
         <div>
           {/* Phone: cover beside the title, status buttons full width below. Wider: status sits under the title, beside the cover. */}
-          <div className="relative mt-3 grid grid-cols-[7rem_1fr] gap-x-4 md:mt-0 md:grid-cols-[11rem_1fr] md:grid-rows-[auto_1fr] md:gap-x-8 lg:grid-cols-[13rem_1fr]">
+          <div className="relative grid grid-cols-[7rem_1fr] gap-x-4 md:mt-0 md:grid-cols-[11rem_1fr] md:grid-rows-[auto_1fr] md:gap-x-8 lg:grid-cols-[13rem_1fr]">
             <Cover session={session} book={book} className="w-full md:row-span-2" />
             <div className="min-w-0 pt-1 md:pt-0">
               <h1 className="font-display text-2xl/tight font-semibold md:text-3xl/tight tracking-tight text-balance text-stone-900">
