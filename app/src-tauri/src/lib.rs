@@ -61,8 +61,9 @@ fn native_scroll(app: &tauri::App) -> tauri::Result<()> {
   })
 }
 
-// iOS: the page's scroll view stops scrolling (and bouncing, and pulling to refresh)
-// while a sheet is open. The sheet's own scroller is a separate view, unaffected.
+// iOS: the page stops bouncing (so it can't pull to refresh) while a sheet is open;
+// CSS overflow:hidden already stops it scrolling. Not setScrollEnabled: that also
+// freezes the sheet's own scroller, cutting off sheets taller than the screen.
 #[tauri::command]
 fn set_page_scroll(window: tauri::WebviewWindow, enabled: bool) -> Result<(), String> {
   #[cfg(target_os = "ios")]
@@ -71,7 +72,8 @@ fn set_page_scroll(window: tauri::WebviewWindow, enabled: bool) -> Result<(), St
       use objc2::{msg_send, runtime::AnyObject};
       let view = &*(webview.inner() as *const AnyObject);
       let scroll: *mut AnyObject = msg_send![view, scrollView];
-      let _: () = msg_send![scroll, setScrollEnabled: enabled];
+      let _: () = msg_send![scroll, setBounces: enabled];
+      let _: () = msg_send![scroll, setAlwaysBounceVertical: enabled];
     })
     .map_err(|e| e.to_string())?;
   #[cfg(not(target_os = "ios"))]
