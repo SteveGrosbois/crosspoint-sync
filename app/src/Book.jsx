@@ -343,12 +343,16 @@ function MergePicker({ session, book, books, onDone, onClose }) {
   const [busy, setBusy] = useState(null)
   const [err, setErr] = useState(null)
   const [stats, setStats] = useState(true)
+  // Syncs with no title or filename (e.g. KOReader on a binary hash) are hidden from
+  // the library; list them here, newest first, so they can be folded into the real book.
+  const [untitled] = useLoad(() => api.untitledBooks(session).catch(() => []), [session], 'untitled books')
   const others = books
     .filter((b) => b.document !== book.document)
     .sort((a, b) => Number(looksLikeSame(book, b)) - Number(looksLikeSame(book, a)) || (a.title ?? '').localeCompare(b.title ?? ''))
+    .concat([...(untitled ?? [])].sort((a, b) => b.timestamp - a.timestamp))
   async function merge(other) {
     const what = stats ? 'progress, clippings and reading stats' : 'progress and clippings'
-    if (!confirm(`Merge "${other.title || other.filename}" into this book? Its ${what} move here, and future syncs of it land here too.`)) return
+    if (!confirm(`Merge "${other.title || other.filename || 'Untitled book'}" into this book? Its ${what} move here, and future syncs of it land here too.`)) return
     setBusy(other.document)
     setErr(null)
     try {
@@ -374,9 +378,9 @@ function MergePicker({ session, book, books, onDone, onClose }) {
           <button key={b.document} disabled={busy !== null} onClick={() => merge(b)} className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-stone-50">
             <Cover session={session} book={b} small className="w-9" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-stone-900">{b.title || b.filename}</p>
+              <p className="truncate text-sm font-semibold text-stone-900">{b.title || b.filename || 'Untitled book'}</p>
               <p className="truncate text-xs text-stone-500">
-                {[b.author, pct(b.percentage), b.device].filter(Boolean).join(' · ')}
+                {[b.author, pct(b.percentage), b.device, !b.title && !b.filename && b.timestamp && `synced ${ago(b.timestamp)}`].filter(Boolean).join(' · ')}
               </p>
             </div>
             {busy === b.document ? (

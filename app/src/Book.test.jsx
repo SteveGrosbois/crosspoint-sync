@@ -5,8 +5,9 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 vi.hoisted(() => {
   window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
 })
-vi.mock('./api.js', () => ({ isApp: false, api: { setStatus: vi.fn() } }))
-vi.mock('./ui.jsx', async (original) => ({ ...await original(), useLoad: () => [null] }))
+vi.mock('./api.js', () => ({ isApp: false, api: { setStatus: vi.fn(), merge: vi.fn() } }))
+const loads = vi.hoisted(() => ({}))
+vi.mock('./ui.jsx', async (original) => ({ ...await original(), useLoad: (fn, deps, memo) => [loads[memo] ?? null] }))
 vi.mock('./tabbar.js', () => ({ useSheet() {}, useNativeBack() {}, useNativeButton() {} }))
 vi.mock('./SpotifyCard.jsx', () => ({ default: () => null }))
 import Book from './Book.jsx'
@@ -38,4 +39,17 @@ it('keeps the saved status and allows retry after a failed update', async () => 
   fireEvent.change(select, { target: { value: 'paused' } })
   await waitFor(() => expect(onChange).toHaveBeenCalledOnce())
   expect(screen.queryByRole('alert')).toBeNull()
+})
+
+it('offers hidden untitled syncs as merge candidates with device, progress and last sync', async () => {
+  loads['untitled books'] = [{ document: 'koreader-hash', device: 'Kobo', percentage: 0.41, timestamp: Date.now() / 1000 - 7200 }]
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  api.merge.mockResolvedValue({})
+  render(<Book session={{}} book={book} books={[book]} onChange={vi.fn()} />)
+  fireEvent.click(screen.getByLabelText('More'))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Merge a duplicate/ }))
+  expect(screen.getByText('41% · Kobo · synced 2h ago')).toBeTruthy()
+  fireEvent.click(screen.getByText('Untitled book'))
+  await waitFor(() => expect(api.merge).toHaveBeenCalledWith({}, 'koreader-hash', 'book', true))
+  delete loads['untitled books']
 })

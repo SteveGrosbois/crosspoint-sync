@@ -188,6 +188,8 @@ export const cached = {
 export const api = {
   // Books a device synced without any metadata can't be shown meaningfully; hide them.
   books: (s) => call(s, '/api/v1/progress?limit=500').then(bookList),
+  // The hidden ones, so they can be merged into the book they really are.
+  untitledBooks: (s) => call(s, '/api/v1/progress?limit=500').then((r) => r.items.filter((b) => !b.title && !b.filename)),
   summary: (s) => call(s, '/api/v1/stats/summary'),
   // tz: minutes behind UTC, so the server buckets pages into local days.
   // Saved activity paints immediately via cached.activity, but a failed refresh
