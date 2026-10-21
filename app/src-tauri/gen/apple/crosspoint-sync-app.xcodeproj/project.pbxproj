@@ -235,18 +235,18 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		"TEMP_AC3F16AB-C6B7-4C0B-ADFA-1C09D7E7F714" /* x86_64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = x86_64;
-			sourceTree = "<group>";
-		};
-		"TEMP_EC7D1D87-13BB-412F-B37E-0E21099DEAE7" /* arm64 */ = {
+		"TEMP_1F875176-9D18-4F70-B0D6-4BACB751ADDA" /* arm64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
 			path = arm64;
+			sourceTree = "<group>";
+		};
+		"TEMP_383FD744-DD5C-4D3B-B2F6-B078D240E7F0" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
