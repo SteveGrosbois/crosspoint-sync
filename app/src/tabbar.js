@@ -13,15 +13,23 @@ import {
 import { invoke } from '@tauri-apps/api/core'
 import { isApp } from './api.js'
 
-// iPhone app: a real UITabBar over the webview (Liquid Glass on iOS 26) replaces the
-// HTML tab bar. iPad keeps the sidebar; Android and the web keep the HTML bar.
-export const nativeTabBar = isApp && /iPhone/.test(navigator.userAgent)
-// The HTML controls that native buttons replace carry `native-hide` (index.css).
-if (nativeTabBar) document.documentElement.classList.add('native-chrome')
+// Resolve before React mounts; older iPhones keep the same HTML controls as Android.
+export let nativeTabBar = false
+let wide
+export async function initializeNavigation() {
+  if (isApp && /iPhone/.test(navigator.userAgent)) {
+    nativeTabBar = await invoke('supports_native_chrome').catch(() => false)
+  }
+  wide = nativeTabBar ? matchMedia('(min-width: 768px)') : null
+  document.documentElement.classList.toggle('native-chrome', nativeTabBar)
+  // Shows the top scroll edge effect (index.css) once content is under the buttons.
+  if (nativeTabBar) {
+    const on = () => document.documentElement.classList.toggle('scrolled', scrollY > 0)
+    addEventListener('scroll', on, { passive: true })
+    on()
+  }
+}
 
-// The native bar sits above anything the webview draws, so it steps aside while a
-// sheet is open, and when a landscape iPhone is wide enough for the sidebar.
-const wide = nativeTabBar && matchMedia('(min-width: 768px)')
 let sheets = 0
 const sync = () => {
   // The page behind an open sheet stays put: CSS for the web and Android's scroll,
@@ -85,7 +93,8 @@ export function mountTabBar(items, selectedId) {
   let live = true
   let listener
   configureTabBar({ items, selectedId, tint: '#4a7a62' }).then(sync, () => {})
-  onTabSelected(({ id }) => (location.hash = id)).then((l) => (live ? (listener = l) : l.unregister()), () => {})
+  // replace, not push: switching tabs isn't a step the back swipe should undo.
+  onTabSelected(({ id }) => location.replace(id)).then((l) => (live ? (listener = l) : l.unregister()), () => {})
   wide.addEventListener('change', sync)
   return () => {
     live = false

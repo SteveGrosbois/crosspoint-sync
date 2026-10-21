@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, CalendarDays, Hash, MoreHorizontal, PenLine, Split, Trash2, Image as ImageIcon, Loader2, Merge, Quote, Search, Share2, Star, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Hash, MoreHorizontal, PenLine, Split, Trash2, Image as ImageIcon, Loader2, Merge, Quote, Search, Star, X } from 'lucide-react'
 import { api, isApp } from './api.js'
 import { renderCard } from './shareCard.js'
 import { isPace, moodEmoji } from './moods.js'
@@ -7,7 +7,7 @@ import ShareSheet from './ShareSheet.jsx'
 import { useSheet, useNativeBack, useNativeButton } from './tabbar.js'
 import SpotifyCard from './SpotifyCard.jsx'
 import { Picker } from './Settings.jsx'
-import { STATUS, Card, Cover, EmptyState, ErrorNote, ProgressBar, Spinner, ViaHardcover, ago, duration, notify, pct, useLoad } from './ui.jsx'
+import { STATUS, Card, Cover, EmptyState, ErrorNote, ProgressBar, ShareIcon, Spinner, ViaHardcover, ago, duration, notify, pct, useLoad } from './ui.jsx'
 
 const date = (unix, opts) =>
   unix ? new Date(unix * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', ...opts }) : null
@@ -214,7 +214,7 @@ function Clippings({ session, book }) {
         return (
           <div key={c.id}>
             {heading && <p className="mt-5 mb-2 text-sm font-medium text-stone-500">{heading}</p>}
-            <article className="group relative border-b border-stone-200 py-5 pr-8 select-none [-webkit-touch-callout:none] md:select-text" {...hold(() => setDeleting(c))}>
+            <article className="group relative border-b border-stone-200 py-5 pr-8 select-none [-webkit-touch-callout:none]" {...hold(() => setDeleting(c))}>
               <ClipMenu onDelete={() => setDeleting(c)} />
               <blockquote className="font-display text-lg/relaxed text-stone-800">
                 {c.text}
@@ -226,7 +226,7 @@ function Clippings({ session, book }) {
                   className="-ml-2 flex h-9 items-center gap-1.5 rounded-full px-2 text-sm font-medium text-brand-600 active:bg-stone-100"
                   aria-label="Share clipping"
                 >
-                  <Share2 className="size-4" /> Share
+                  <ShareIcon className="size-4" /> Share
                 </button>
                 <p className="text-xs text-stone-500">{date(c.created_at)}</p>
               </div>

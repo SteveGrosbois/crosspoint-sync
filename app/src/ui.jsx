@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { BookOpen, CircleAlert, CircleCheck, CircleX, Pause } from 'lucide-react'
+import { BookOpen, CircleAlert, CircleCheck, CircleX, Pause, Share, Share2 } from 'lucide-react'
 import { api, isApp } from './api.js'
 
 export const STATUS = [
@@ -359,6 +359,11 @@ export function EmptyAction({ href, onClick, children }) {
     </button>
   )
 }
+
+// The platform's own share glyph: the box-and-arrow on Apple devices (iPadOS reports
+// itself as a Mac), the three connected dots elsewhere (Android's).
+const apple = /iphone|ipad|ipod|macintosh/i.test(navigator.userAgent)
+export const ShareIcon = apple ? Share : Share2
 
 export function Toggle({ checked, onChange, label }) {
   return (

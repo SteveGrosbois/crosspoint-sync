@@ -110,7 +110,18 @@ html { color-scheme: light; }
 body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+
+/* Text entry still needs selection handles and copy/paste. */
+input, textarea, [contenteditable]:not([contenteditable="false"]) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+img { -webkit-user-drag: none; }
 
 /* Status bar backdrop: pinned in the page colour so content scrolls (and rubber-bands)
    under it, as in native apps, instead of the whole screen moving. Height is 0 where
@@ -125,6 +136,22 @@ body::before {
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
+/* iPhone: the glass buttons float over the page, so once it scrolls the strip grows
+   into iOS 26's scroll edge effect: solid behind the status bar, fading through a
+   soft blur to clear below the button row. Hidden at rest so it never veils titles. */
+.native-chrome body::before {
+  height: calc(env(safe-area-inset-top) + 4.5rem);
+  background: linear-gradient(
+    var(--color-stone-50) env(safe-area-inset-top),
+    color-mix(in srgb, var(--color-stone-50) 75%, transparent) calc(env(safe-area-inset-top) + 2rem),
+    transparent
+  );
+  -webkit-mask-image: linear-gradient(black 55%, transparent);
+  mask-image: linear-gradient(black 55%, transparent);
+  opacity: 0;
+  transition: opacity 200ms ease-out;
+}
+.native-chrome.scrolled body::before { opacity: 1; }
 
 /* Toast entrance: rise and fade in. */
 @keyframes toast-in {
