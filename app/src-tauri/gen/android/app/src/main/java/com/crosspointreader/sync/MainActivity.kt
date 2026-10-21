@@ -12,6 +12,7 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import android.util.Base64
 import android.view.View
+import android.view.ViewGroup
 import android.view.ViewTreeObserver
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -73,7 +74,10 @@ class MainActivity : TauriActivity() {
   override fun setContentView(view: View?) {
     if (view !is WebView) return super.setContentView(view)
     val swipe = SwipeRefreshLayout(this).apply {
-      addView(view)
+      // MATCH_PARENT, not addView's WRAP_CONTENT default: a wrap-content WebView reports
+      // a zero viewport height, so every vh/dvh unit in the page becomes 0 (sheets'
+      // max-h-[92dvh] collapsed to nothing).
+      addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
       setColorSchemeColors(0xFF4A7A62.toInt())
       setOnChildScrollUpCallback { _, _ -> !refreshEnabled || view.canScrollVertically(-1) }
       setOnRefreshListener { view.evaluateJavascript("dispatchEvent(new Event('crosspoint-refresh'))", null) }
