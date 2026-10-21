@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, CalendarDays, Hash, MoreHorizontal, PenLine, Split, Trash2, Image as ImageIcon, Loader2, Merge, Quote, Search, Star, X } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Hash, MoreHorizontal, PenLine, Split, Trash2, Image as ImageIcon, Loader2, Merge, Quote, Search, Star } from 'lucide-react'
 import { api, isApp } from './api.js'
 import { renderCard } from './shareCard.js'
 import { isPace, moodEmoji } from './moods.js'
 import ShareSheet from './ShareSheet.jsx'
-import { useSheet, useNativeBack, useNativeButton } from './tabbar.js'
+import { useNativeBack, useNativeButton } from './tabbar.js'
 import SpotifyCard from './SpotifyCard.jsx'
 import { Picker } from './Settings.jsx'
-import { STATUS, Card, Cover, EmptyState, ErrorNote, ProgressBar, ShareIcon, Spinner, ViaHardcover, ago, duration, notify, pct, useLoad } from './ui.jsx'
+import { STATUS, Card, Cover, EmptyState, ErrorNote, ProgressBar, ShareIcon, Sheet, Spinner, ViaHardcover, ago, duration, notify, pct, useLoad } from './ui.jsx'
 
 const date = (unix, opts) =>
   unix ? new Date(unix * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', ...opts }) : null
@@ -255,23 +255,6 @@ const norm = (s) => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 // Same normalized title (and author when both have one): probably the same book synced twice.
 export const looksLikeSame = (a, b) =>
   a.document !== b.document && norm(a.title) && norm(a.title) === norm(b.title) && (!a.author || !b.author || norm(a.author) === norm(b.author))
-
-function Sheet({ title, onClose, children }) {
-  useSheet()
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
-      <div className="absolute inset-0 bg-stone-950/40" onClick={onClose} />
-      <div className="relative max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-[28px] bg-stone-50 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-lg md:rounded-[28px] md:p-6">
-        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-stone-300 md:hidden" />
-        <button onClick={onClose} className="absolute top-3 right-3 grid size-10 place-items-center rounded-full text-stone-500 active:bg-stone-200" aria-label="Close">
-          <X className="size-5" />
-        </button>
-        <h2 className="pr-10 font-display text-xl font-semibold text-stone-900">{title}</h2>
-        {children}
-      </div>
-    </div>
-  )
-}
 
 const field =
   'h-11 w-full rounded-xl bg-surface px-3 text-base text-stone-900 ring-1 ring-stone-950/10 outline-none placeholder:text-stone-400 focus:ring-2 focus:ring-brand-500/60'

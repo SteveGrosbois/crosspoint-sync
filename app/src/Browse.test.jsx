@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { JSDOM } from 'jsdom'
 vi.hoisted(() => {
   window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
 })
@@ -9,10 +10,56 @@ vi.mock('./tabbar.js', () => ({ useNativeBack() {}, useNativeButton() {}, useShe
 vi.mock('./catalogs.js', async (orig) => ({ ...await orig(), loadCatalogs: vi.fn(), search: vi.fn() }))
 import Browse from './Browse.jsx'
 import { loadCatalogs, search } from './catalogs.js'
-const catalogs = [{ id: 'a', name: 'First catalog' }, { id: 'b', name: 'Second catalog' }]
+// Node's experimental storage can shadow jsdom's localStorage.
+vi.stubGlobal('localStorage', new JSDOM('', { url: 'https://app.test' }).window.localStorage)
+const catalogs = [{ id: 'a', name: 'First catalog', url: 'https://first.example/opds' }, { id: 'b', name: 'Second catalog', url: 'https://second.example/opds' }]
 const entry = (title) => ({ id: 'shared-id', title, authors: ['Author'], thumbnail: '/cover.jpg', navigation: [], acquisitions: [] })
 const feed = (entries = [], extra = {}) => ({ entries, groups: [], navigation: [], facets: [], ...extra })
-afterEach(() => { cleanup(); vi.clearAllMocks(); location.hash = '' })
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); localStorage.clear(); location.hash = '' })
+
+it('removes only the confirmed catalog without using the WebView confirm dialog, and keeps it removed after reopening', () => {
+  localStorage.setItem('crosspoint-catalogs', JSON.stringify(catalogs))
+  loadCatalogs.mockImplementation(() => JSON.parse(localStorage.getItem('crosspoint-catalogs')))
+  const browserConfirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+  const { unmount } = render(<Browse parts={['browse', 'manage']} />)
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove First catalog' }))
+  const dialog = screen.getByRole('dialog', { name: 'Remove First catalog?' })
+  expect(screen.getByRole('link', { name: /First catalog/ })).toBeTruthy()
+  expect(JSON.parse(localStorage.getItem('crosspoint-catalogs'))).toEqual(catalogs)
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Remove' }))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(screen.queryByRole('link', { name: /First catalog/ })).toBeNull()
+  expect(screen.getByRole('link', { name: /Second catalog/ })).toBeTruthy()
+  expect(JSON.parse(localStorage.getItem('crosspoint-catalogs'))).toEqual([catalogs[1]])
+  expect(browserConfirm).not.toHaveBeenCalled()
+
+  unmount()
+  render(<Browse parts={['browse', 'manage']} />)
+  expect(screen.queryByRole('button', { name: 'Remove First catalog' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Remove Second catalog' })).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Remove Second catalog' }))
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Remove' }))
+  expect(JSON.parse(localStorage.getItem('crosspoint-catalogs'))).toEqual([])
+  cleanup()
+  render(<Browse parts={['browse', 'manage']} />)
+  expect(screen.queryByRole('button', { name: /^Remove / })).toBeNull()
+  expect(screen.getByRole('heading', { name: 'Add a catalog' })).toBeTruthy()
+})
+
+it('keeps catalogs when removal is cancelled or closed', () => {
+  loadCatalogs.mockReturnValue(catalogs)
+  localStorage.setItem('crosspoint-catalogs', JSON.stringify(catalogs))
+  render(<Browse parts={['browse', 'manage']} />)
+  for (const action of ['Cancel', 'Close']) {
+    fireEvent.click(screen.getByRole('button', { name: 'Remove First catalog' }))
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: action }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Remove First catalog' })).toBeTruthy()
+    expect(JSON.parse(localStorage.getItem('crosspoint-catalogs'))).toEqual(catalogs)
+  }
+})
 
 it('combines catalogs and grouped results in one grid with the correct book destinations', async () => {
   loadCatalogs.mockReturnValue(catalogs)

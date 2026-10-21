@@ -1,6 +1,24 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { BookOpen, CircleAlert, CircleCheck, CircleX, Pause, Share, Share2 } from 'lucide-react'
+import { BookOpen, CircleAlert, CircleCheck, CircleX, Pause, Share, Share2, X } from 'lucide-react'
 import { api, isApp } from './api.js'
+import { useSheet } from './tabbar.js'
+
+export function Sheet({ title, onClose, children }) {
+  useSheet()
+  return (
+    <div className="fixed inset-0 z-40 flex items-end justify-center md:items-center">
+      <div className="absolute inset-0 bg-stone-950/40" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label={title} className="relative max-h-[88dvh] w-full overflow-y-auto overscroll-contain rounded-t-[28px] bg-stone-50 p-5 pb-[max(1.25rem,env(safe-area-inset-bottom))] md:max-w-lg md:rounded-[28px] md:p-6">
+        <div className="mx-auto mb-4 h-1.5 w-10 rounded-full bg-stone-300 md:hidden" />
+        <button onClick={onClose} className="absolute top-3 right-3 grid size-10 place-items-center rounded-full text-stone-500 active:bg-stone-200" aria-label="Close">
+          <X className="size-5" />
+        </button>
+        <h2 className="pr-10 font-display text-xl font-semibold text-stone-900">{title}</h2>
+        {children}
+      </div>
+    </div>
+  )
+}
 
 export const STATUS = [
   { id: 'reading', label: 'Reading', icon: BookOpen },

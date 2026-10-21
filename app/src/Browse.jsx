@@ -5,7 +5,7 @@ import { isApp } from './api.js'
 import { loadDevicePrefs } from './device.js'
 import { download, feed as fetchFeed, loadCatalogs, moveCatalog, navRows, readable, saveCatalogs, search, sendDownload } from './catalogs.js'
 import { progressLabel } from './Send.jsx'
-import { Card, EmptyAction, EmptyState, Eyebrow, Spinner, folderLabel, notify } from './ui.jsx'
+import { Card, EmptyAction, EmptyState, Eyebrow, Sheet, Spinner, folderLabel, notify } from './ui.jsx'
 import { useNativeBack } from './tabbar.js'
 
 // Hash routes:
@@ -715,6 +715,7 @@ const haptic = (fn) => isApp && fn().catch(() => {})
 
 function Manage({ catalogs, setCatalogs }) {
   const [editing, setEditing] = useState(catalogs.length ? null : 'new') // catalog | 'new' | null
+  const [removing, setRemoving] = useState(null)
   const save = (cat) => {
     setCatalogs(catalogs.some((c) => c.id === cat.id) ? catalogs.map((c) => (c.id === cat.id ? cat : c)) : [...catalogs, cat])
     setEditing(null)
@@ -837,7 +838,7 @@ function Manage({ catalogs, setCatalogs }) {
                 <Pencil className="size-4" />
               </button>
               <button
-                onClick={() => confirm(`Remove ${c.name}?`) && setCatalogs(catalogs.filter((x) => x.id !== c.id))}
+                onClick={() => setRemoving(c)}
                 className="grid size-10 place-items-center rounded-full text-stone-400 active:bg-stone-100"
                 aria-label={`Remove ${c.name}`}
               >
@@ -860,6 +861,25 @@ function Manage({ catalogs, setCatalogs }) {
         >
           <Plus className="size-5" /> Add catalog
         </button>
+      )}
+      {removing && (
+        <Sheet title={`Remove ${removing.name}?`} onClose={() => setRemoving(null)}>
+          <p className="mt-3 text-sm/6 text-stone-600">You can add this catalog again later. Downloaded books are kept.</p>
+          <div className="mt-5 grid gap-2">
+            <button
+              onClick={() => {
+                setCatalogs(catalogs.filter((c) => c.id !== removing.id))
+                setRemoving(null)
+              }}
+              className="h-12 rounded-xl bg-red-600 text-base font-semibold text-white active:bg-red-700"
+            >
+              Remove
+            </button>
+            <button onClick={() => setRemoving(null)} className="h-12 rounded-xl bg-surface text-base font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100">
+              Cancel
+            </button>
+          </div>
+        </Sheet>
       )}
     </div>
   )
