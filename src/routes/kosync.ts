@@ -378,7 +378,8 @@ export function kosyncRoutes(db: DB, config: Config, refreshProgress: ProgressRe
     ) {
       return kosyncError(c, 403, 2003, 'Invalid request');
     }
-    const exists = db.prepare('SELECT 1 FROM users WHERE username = ?').get(username);
+    // Case-insensitive: legacy mixed-case names (e.g. "PiperKev") must block "piperkev".
+    const exists = db.prepare('SELECT 1 FROM users WHERE lower(username) = ?').get(username);
     if (exists) {
       return kosyncError(c, 402, 2002, 'Username is already registered.');
     }
