@@ -1,3 +1,4 @@
+import { exportBookorbitSessions } from './bookorbit-session-export.js';
 import { withTransaction, type DB } from '../db/db.js';
 import { nowSeconds } from '../models/sync.js';
 import { bookorbitStatsJson } from './bookorbit.js';
@@ -120,6 +121,7 @@ async function importAccount(db: DB, userId: number, http: HttpTransport): Promi
   const bounded: HttpTransport = (url, init) => http(url, { ...init,
     signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000) });
   try {
+    await exportBookorbitSessions(db, userId, bounded);
     const cred = decryptCredential(account, db);
     // Include old/finished books already known to Sync, not just today's open book.
     const unmatched = db.prepare(`SELECT d.document FROM documents d WHERE d.user_id = ?
@@ -134,6 +136,11 @@ async function importAccount(db: DB, userId: number, http: HttpTransport): Promi
     const books = db.prepare(`SELECT DISTINCT m.external_id FROM connector_matches m
       LEFT JOIN bookorbit_stats_sync s ON s.user_id = m.user_id AND s.external_id = m.external_id
       WHERE m.user_id = ? AND m.connector_id = 'bookorbit' AND m.external_id IS NOT NULL
+        AND NOT EXISTS (SELECT 1 FROM bookorbit_session_exports e
+          JOIN bookorbit_session_destination dest ON dest.user_id=e.user_id AND dest.destination=e.destination
+          JOIN reading_sessions local USING(user_id, device_id, session_id)
+          WHERE e.user_id=m.user_id AND e.external_id=m.external_id AND e.prior_ids IS NOT NULL
+            AND (e.remote_id IS NULL OR e.exported_seconds < local.seconds))
         AND (s.refreshed_at IS NULL OR s.cutoff IS NOT NULL OR s.refreshed_at <= ?)
       ORDER BY COALESCE(s.attempted_at, 0), m.external_id LIMIT ?`)
       .all(userId, nowSeconds() - REFRESH_SECONDS, BOOKS_PER_PASS) as { external_id: string }[];

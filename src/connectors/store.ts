@@ -1,3 +1,4 @@
+import { bookorbitDestination } from '../models/reading-sessions.js';
 import { withTransaction, type DB } from '../db/db.js';
 import { nowSeconds } from '../models/sync.js';
 import { decryptSecret, encryptSecret } from '../crypto/secrets.js';
@@ -46,6 +47,8 @@ export function upsertAccount(
          updated_at = excluded.updated_at`
     ).run(userId, connectorId, enc, accountLabel, now, now);
     if (connectorId === 'bookorbit') {
+      db.prepare(`INSERT INTO bookorbit_session_destination VALUES (?, ?) ON CONFLICT(user_id) DO UPDATE SET destination=excluded.destination`)
+        .run(userId, bookorbitDestination(cred));
       // A replacement account must not inherit sessions or external book IDs.
       db.prepare('DELETE FROM bookorbit_stats_sync WHERE user_id = ?').run(userId);
       if (previous && !sameOrbitAccount) {

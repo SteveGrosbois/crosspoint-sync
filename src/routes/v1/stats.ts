@@ -18,6 +18,8 @@ import { resolveDocument, statsAliases, statsDocuments } from '../../models/merg
 import type { HttpTransport } from '../../connectors/types.js';
 import { bookorbitExclusions, readBookorbitStats } from '../../models/bookorbit-stats.js';
 
+import { parseReadingSession } from '../../models/reading-sessions.js';
+
 const MAX_BOOK_BATCH = 20;
 const MAX_INFO_LOOKUPS = 25;
 
@@ -29,6 +31,41 @@ function deviceIdFrom(o: Record<string, unknown>): string | null {
 
 export function statsRoutes(db: DB, http?: HttpTransport): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
+
+  // Cumulative session checkpoints retain one identity, including stale retries.
+  app.put('/stats/sessions', async (c) => {
+    let body: any;
+    try { body = await c.req.json(); } catch { return kosyncError(c, 403, 2003, 'Invalid request'); }
+    const deviceId = body && deviceIdFrom(body);
+    const now = nowSeconds();
+    if (!deviceId || !Array.isArray(body.items) || !body.items.length || body.items.length > 20) {
+      return kosyncError(c, 403, 2003, 'Invalid request');
+    }
+    const items = body.items.map((s: unknown) => parseReadingSession(s, now));
+    if (items.some((s: unknown) => !s) || new Set(items.map((s: any) => s.session_id)).size !== items.length) {
+      return kosyncError(c, 403, 2003, 'Invalid request');
+    }
+    const userId = c.get('user').id;
+    const existing = db.prepare('SELECT * FROM reading_sessions WHERE user_id=? AND device_id=? AND session_id=?');
+    for (const s of items) {
+      const old = existing.get(userId, deviceId, s.session_id);
+      if (old && (['document', 'started_at', 'utc_offset_minutes'].some((key) => old[key] !== s[key]) ||
+          !((s.seconds >= Number(old.seconds) && s.ended_at >= Number(old.ended_at)) ||
+            (s.seconds <= Number(old.seconds) && s.ended_at <= Number(old.ended_at))))) {
+        return kosyncError(c, 403, 2003, 'Session ID already has different data');
+      }
+    }
+    withTransaction(db, () => {
+      const insert = db.prepare(`INSERT INTO reading_sessions
+        (user_id, device_id, session_id, document, started_at, ended_at, seconds, utc_offset_minutes, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id,device_id,session_id) DO UPDATE SET
+          seconds=MAX(reading_sessions.seconds, excluded.seconds),
+          ended_at=MAX(reading_sessions.ended_at, excluded.ended_at)`);
+      for (const s of items) insert.run(userId, deviceId, s.session_id, s.document, s.started_at,
+        s.ended_at, s.seconds, s.utc_offset_minutes, now);
+    });
+    return c.json({ until: now, accepted_session_ids: items.map((s: any) => s.session_id) });
+  });
 
   app.put('/stats/global', async (c) => {
     let body: unknown;

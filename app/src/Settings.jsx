@@ -44,7 +44,7 @@ const HINTS = {
   kosync: 'Mirrors your reading progress to another KOReader-compatible (KOSync) server. For Calibre-Web, use your library URL ending in /kosync.',
   bookfusion: 'Syncs reading progress with BookFusion. You approve the request on bookfusion.com.',
   audiobookshelf: 'Keeps your place between the ebook and the audiobook. Create an API key in Audiobookshelf under Settings, Users, API Keys.',
-  bookorbit: 'Syncs progress both ways, adds clippings as highlights, and imports reading time and sessions, including history, for matched books. Includes Kindle and other BookOrbit reader history alongside your device stats. Repeated sessions are counted once.',
+  bookorbit: 'Syncs progress both ways, adds clippings as highlights, and exchanges reading sessions for matched books. Imports BookOrbit history and exports sessions recorded by newer CrossInk firmware. Includes other BookOrbit reader history alongside your device stats. Repeated sessions are counted once.',
   spotify: 'Moves your progress forward when you listen ahead in the Spotify audiobook, and resumes it there. Audiobooks are in the US, UK, Canada, Ireland, Australia and New Zealand.',
   kindle: 'Linking needs the CrossPoint Kindle Link browser extension.',
 }

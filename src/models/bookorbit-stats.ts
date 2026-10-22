@@ -3,7 +3,7 @@ import { HISTORY_BYTES, HISTORY_DAYS, type GlobalStatsSnapshot, type BookStatsSn
 
 interface StoredSession {
   session_id: number; external_id: string; started_at: number; ended_at: number;
-  seconds: number; source: string | null; timezone: string; refreshed_at: number;
+  seconds: number; owned: number; source: string | null; timezone: string; refreshed_at: number;
 }
 const DAY_MS = 86400_000;
 const EPOCH = Date.UTC(2000, 0, 1);
@@ -30,7 +30,10 @@ export interface BookorbitStats {
 /** Count provider identities once without guessing overlaps with cumulative device totals. */
 export function readBookorbitStats(db: DB, userId: number, documents?: string[]): BookorbitStats {
   const docFilter = documents ? `AND m.document IN (${documents.map(() => '?').join(',')})` : '';
-  const rows = db.prepare(`SELECT s.*, b.timezone, b.refreshed_at FROM bookorbit_stats_sessions s
+  const rows = db.prepare(`SELECT s.*, b.timezone, b.refreshed_at,
+    EXISTS(SELECT 1 FROM bookorbit_session_exports e
+      JOIN bookorbit_session_destination dest ON dest.user_id=e.user_id AND dest.destination=e.destination
+      WHERE e.user_id=s.user_id AND e.external_id=s.external_id AND e.remote_id=s.session_id) AS owned FROM bookorbit_stats_sessions s
     JOIN bookorbit_stats_sync b ON b.user_id = s.user_id AND b.external_id = s.external_id AND b.active_generation = s.generation
     WHERE s.user_id = ? AND EXISTS (SELECT 1 FROM connector_matches m WHERE m.user_id = s.user_id
       AND m.connector_id = 'bookorbit' AND m.external_id = s.external_id ${docFilter})
@@ -50,6 +53,11 @@ export function readBookorbitStats(db: DB, userId: number, documents?: string[])
   for (const s of rows) {
     out.updated_at = Math.max(out.updated_at, s.refreshed_at);
     if (s.seconds <= 0) continue;
+    if (s.owned) {
+      out.excluded_sessions++;
+      out.excluded_seconds += s.seconds;
+      continue;
+    }
     // Source alone (e.g. KOReader on a Kindle) says nothing about whether a
     // CrossInk counter contains this reading. Only remove identifiable repeats.
     // A zero-length manual entry has no time span to compare reliably.
@@ -113,5 +121,5 @@ export function readBookorbitStats(db: DB, userId: number, documents?: string[])
 
 export function bookorbitExclusions(stats: BookorbitStats) {
   return { excluded_sessions: stats.excluded_sessions, excluded_seconds: stats.excluded_seconds,
-    reason: stats.excluded_sessions ? 'Repeated BookOrbit session IDs or exact duplicate session records are counted once.' : null };
+    reason: stats.excluded_sessions ? 'Exported CrossPoint sessions, repeated BookOrbit IDs, and exact duplicate records are counted once.' : null };
 }

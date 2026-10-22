@@ -140,6 +140,15 @@ export async function bookorbitStatsJson(cred: Credential, http: HttpTransport, 
   return res.json();
 }
 
+/** Save a cumulative session checkpoint with a provider-side retry identity. */
+export async function saveBookorbitSession(cred: Credential, http: HttpTransport, file: string, body: unknown): Promise<void> {
+  const c = parseCred(cred);
+  if (!c) throw new ConnectorOperationError('invalid BookOrbit credentials', false, true);
+  const res = await call(http, c, 'POST', `/books/files/${encodeURIComponent(file)}/sessions`, body);
+  if (res.status !== 204) throw new ConnectorOperationError(`BookOrbit session export failed (${res.status})`,
+    res.status === 429 || res.status >= 500, res.status === 401 || res.status === 403);
+}
+
 async function validate(cred: Credential, http: HttpTransport): Promise<ValidateResult> {
   const c = parseCred(cred);
   if (!c) return { ok: false, error: 'server URL, username and password are required' };

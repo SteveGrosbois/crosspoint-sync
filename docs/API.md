@@ -492,6 +492,54 @@ The device's `GlobalReadingStats` as JSON:
 
 Response: `{"until": 1752345678}`.
 
+#### PUT /api/v1/stats/sessions
+
+Uploads measured reading-session checkpoints alongside the existing counters.
+
+```json
+{"device_id":"reader-id","items":[{"session_id":"stable-session-id","document":"0123456789abcdef0123456789abcdef","started_at":1609502400,"ended_at":1609503000,"seconds":600,"utc_offset_minutes":0}]}
+```
+
+Accepts 1–20 records. IDs are scoped to the authenticated user and device;
+`session_id` is 1–64 ASCII letters, digits, `_` or `-`, and `document` is a
+32-hex reader document ID. Timestamps are integer Unix UTC seconds; the offset
+records the device's local timezone at capture. Active seconds must be at least
+10, no greater than the wall-clock span, and the span cannot exceed seven days.
+Future timestamps beyond five minutes are rejected. Undated reading remains in
+legacy counters and is not manufactured into dated sessions.
+
+Checkpoints retain their ID and original book, start, and timezone. Later
+checkpoints may increase both duration and end time; exact or older checkpoints
+are acknowledged without decreasing stored values. Inconsistent identities or
+mixed-direction updates reject the complete batch.
+
+Returns `{"until":1609503100,"accepted_session_ids":["stable-session-id"]}`.
+Readers must verify the specific acknowledged IDs before clearing their outbox.
+HTTP success or an old server's generic stats response alone is insufficient.
+
+CrossInk keeps session capture in RAM and writes it at existing reader save points
+(progress saves, sleep/exit, tracking disable and restart handoffs), without an
+additional per-minute session timer or extra book/global counter snapshots.
+Stable IDs still allow cumulative updates at successive save points.
+
+Sessions do **not** add to device totals, book totals, daily counters, or streaks:
+those existing snapshots remain authoritative. Linked, enabled BookOrbit accounts
+export measured sessions for matched books in bounded background passes. A stable
+provider ID makes timeout retries and later checkpoints update the same session.
+Old aggregate history remains intact; it is not converted into invented sessions.
+XTC stats-only uploads require an existing/manual match because they carry no
+book title or author metadata.
+
+BookOrbit currently returns numeric IDs rather than the submitted client ID.
+Sync saves a complete preflight ID boundary, verifies the new exact row after
+upload, and retains its numeric ownership mapping across unlink/relink. An
+uncertain initial export defers that book's history reconciliation while keeping
+the previous published history. Verified exported rows are excluded individually
+from imported stats; independent Kindle/other reader sessions remain included.
+BookOrbit's current client API records these exports as `web` reading sessions.
+Export errors appear with the connector's `queue_errors` and retry in the
+background (or on **Sync now**). Account switches use separate ownership mappings.
+
 #### PUT /api/v1/stats/books
 
 Batch (max 20) of per-book `stats_v5` snapshots for one device:

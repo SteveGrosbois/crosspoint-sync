@@ -14,6 +14,9 @@ import { USERNAME_RE } from './kosync.js';
 export function deleteKosyncUserData(db: DB, userId: number, username: string, { keepUser = false } = {}): void {
   withTransaction(db, () => {
     for (const table of [
+      'bookorbit_session_exports',
+      'bookorbit_session_destination',
+      'reading_sessions',
       'connector_queue',
       'epub_maps',
       'connector_matches',

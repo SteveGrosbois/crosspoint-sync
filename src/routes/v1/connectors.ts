@@ -189,7 +189,12 @@ export function connectorRoutes(
           status: account?.status ?? null,
           account: account?.account_label ?? null,
           queue: account ? queueDepth(db, user.id, conn.id) : undefined,
-          queue_errors: account ? queueErrors(db, user.id, conn.id) : undefined,
+          queue_errors: account ? [...queueErrors(db, user.id, conn.id), ...(conn.id === 'bookorbit' ?
+            db.prepare(`SELECT 'reading session' AS kind, e.last_error AS message, COUNT(*) AS count
+              FROM bookorbit_session_exports e JOIN reading_sessions local USING(user_id, device_id, session_id)
+              JOIN bookorbit_session_destination d ON d.user_id=e.user_id AND d.destination=e.destination
+              WHERE e.user_id=? AND e.exported_seconds < local.seconds AND e.last_error IS NOT NULL GROUP BY e.last_error LIMIT 3`)
+              .all(user.id) : [])] : undefined,
           ...(conn.options ? { options: conn.options, option_values: account ? connectorOptions(db, user.id, conn) : null } : {}),
         };
       }),
