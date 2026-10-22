@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DOC, makeTestApp, registerUser } from './helpers.js';
 import { resetEncryptionKeyCache } from '../src/crypto/secrets.js';
 import type { HttpTransport } from '../src/connectors/types.js';
 import { drainQueue } from '../src/connectors/runner.js';
 import { claimReady } from '../src/connectors/queue.js';
-import { saveMatch } from '../src/connectors/store.js';
+import { saveMatch, upsertAccount } from '../src/connectors/store.js';
 
 // A programmable fake transport. Records requests; returns queued responses by
 // URL substring match.
@@ -483,5 +483,23 @@ describe('hardcover highlight quotes', () => {
     expect(
       (db.prepare(`SELECT COUNT(*) AS n FROM connector_queue WHERE connector_id = 'hardcover' AND kind LIKE 'highlight%' AND status = 'pending'`).get() as { n: number }).n
     ).toBe(0);
+  });
+});
+
+describe('progress refresh deadline', () => {
+  it('serves stored progress when a best-effort puller hangs past the deadline', async () => {
+    const hang: HttpTransport = () => new Promise(() => {});
+    const { app, db } = makeTestApp({}, { connectorTransport: hang });
+    const { headers, username } = await registerUser(app);
+    const userId = (db.prepare('SELECT id FROM users WHERE username = ?').get(username) as { id: number }).id;
+    upsertAccount(db, userId, 'audiobookshelf', { server: 'https://abs.example', token: 't' }, null);
+    saveMatch(db, userId, 'audiobookshelf', DOC, { externalId: 'li_1', confidence: 1 }, 'manual');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const pending = app.request('/syncs/progress/' + DOC, { headers });
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect((await pending).status).not.toBe(504);
+    } finally { vi.useRealTimers(); log.mockRestore(); db.close(); }
   });
 });

@@ -88,7 +88,10 @@ export function createProgressRefresh(db: DB, http: HttpTransport = fetchTranspo
         )
       ),
       deadline,
-    ]).then(() => {}).finally(() => {
+    ]).then(() => {}, (error) => {
+      // Best-effort pullers must never fail the GET, not even by running out the clock.
+      if (pullers.some((p) => p.strict)) throw error;
+    }).finally(() => {
       clearTimeout(timer);
       pending.delete(key);
     });
