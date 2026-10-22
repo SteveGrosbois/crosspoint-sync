@@ -4,7 +4,7 @@ import { withTransaction, type DB } from '../../db/db.js';
 import { kosyncError, type AppEnv } from '../../auth/middleware.js';
 import { secretsEnabled } from '../../crypto/secrets.js';
 import { fetchTransport, getConnector, listConnectors } from '../../connectors/registry.js';
-import { purgeConnector, queueDepth } from '../../connectors/queue.js';
+import { purgeConnector, queueDepth, queueErrors } from '../../connectors/queue.js';
 import { backfillConnector } from '../../connectors/fanout.js';
 import { pollConnector, spotifyFirstSync } from '../../connectors/fanin.js';
 import { resolveMatch } from '../../connectors/runner.js';
@@ -189,6 +189,7 @@ export function connectorRoutes(
           status: account?.status ?? null,
           account: account?.account_label ?? null,
           queue: account ? queueDepth(db, user.id, conn.id) : undefined,
+          queue_errors: account ? queueErrors(db, user.id, conn.id) : undefined,
           ...(conn.options ? { options: conn.options, option_values: account ? connectorOptions(db, user.id, conn) : null } : {}),
         };
       }),

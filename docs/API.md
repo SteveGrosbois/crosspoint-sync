@@ -635,7 +635,7 @@ Lists available connectors and this account's link status.
     {"id": "hardcover", "name": "Hardcover", "tier": 1, "beta": false,
      "carries": ["progress", "finished"], "capabilities": {"read": false, "write": true},
      "credential_kind": "token", "linked": true, "status": "ok", "account": "julia",
-     "queue": {"pending": 0, "dead": 0}},
+     "queue": {"pending": 0, "dead": 0}, "queue_errors": []},
     {"id": "readwise", "name": "Readwise", "tier": 1, "beta": false,
      "carries": ["highlight"], "capabilities": {"read": true, "write": true},
      "credential_kind": "token", "linked": false, "status": null, "account": null}
@@ -702,6 +702,21 @@ matched book — for per-book providers.
 BookOrbit also pulls highlights on that refresh: each one is placed by its CFI in BookOrbit's copy of
 the EPUB and stored as a clipping (chapter codepoint offsets, firmware-style id), skipped when the same
 quote is already a clipping on the book, live or deleted.
+
+For outgoing BookOrbit clippings, older records without text offsets are located by their full
+quote in BookOrbit's EPUB. Whitespace, soft hyphens, and straight/curly quotation-mark differences are ignored; the match must be
+unique across the whole book. Missing or ambiguous quotes fail explicitly rather than guessing
+a location. When the formatting comparison finds nothing, long quotes (at least 40 characters
+after normalization) can match with case and punctuation differences ignored, again requiring
+the entire quote to be unique. Short selections remain strict. Clippings with offsets continue
+to use their exact saved positions and text checks.
+
+The connector list includes `queue_errors: [{kind, message, count}]` for linked services: up to
+three recent grouped failures for that user's service, including pending retries and permanently
+failed items. Completed items no longer contribute errors. Settings shows waiting/failed counts
+and these messages, refreshing every five seconds while work is pending. The "Sync now" response's
+`queued` value counts export items (progress and individual clippings), not distinct books or
+successful deliveries. "Sync now" also requeues failed items for another attempt.
 
 ### GET /healthz
 

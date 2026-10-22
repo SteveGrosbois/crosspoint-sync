@@ -3,7 +3,7 @@ import { DOC, makeTestApp, registerUser } from './helpers.js';
 import { resetEncryptionKeyCache } from '../src/crypto/secrets.js';
 import type { HttpTransport } from '../src/connectors/types.js';
 import { drainQueue } from '../src/connectors/runner.js';
-import { claimReady } from '../src/connectors/queue.js';
+import { claimReady, enqueue, markFailed } from '../src/connectors/queue.js';
 import { saveMatch, upsertAccount } from '../src/connectors/store.js';
 
 // A programmable fake transport. Records requests; returns queued responses by
@@ -47,6 +47,24 @@ afterEach(() => {
 });
 
 describe('connector management API', () => {
+  it('exposes saved delivery failures only to the account that owns them', async () => {
+    const { app, db } = makeTestApp();
+    const owner = await registerUser(app);
+    const other = await registerUser(app);
+    const { id } = db.prepare('SELECT id FROM users WHERE username = ?').get(owner.username) as { id: number };
+    upsertAccount(db, id, 'bookorbit', { server: 'orbit.test', username: 'reader', password: 'pw' }, null);
+    enqueue(db, id, 'bookorbit', { kind: 'highlight', document: DOC, timestamp: 1 }, 'highlight:a', 1);
+    const [row] = claimReady(db, 1, 1);
+    markFailed(db, row, 'clipping has no position (update the reader firmware)', false, 1);
+    const list = await (await app.request('/api/v1/connectors', { headers: owner.headers })).json();
+    expect(list.connectors.find((c: { id: string }) => c.id === 'bookorbit')).toMatchObject({
+      queue: { pending: 0, dead: 1 },
+      queue_errors: [{ kind: 'clipping', count: 1, message: 'clipping has no position (update the reader firmware)' }],
+    });
+    const otherList = await (await app.request('/api/v1/connectors', { headers: other.headers })).json();
+    expect(otherList.connectors.find((c: { id: string }) => c.id === 'bookorbit').queue_errors).toBeUndefined();
+  });
+
   it('lists connectors with encryption status and unlinked state', async () => {
     const fake = fakeTransport();
     const { app } = makeTestApp({}, { connectorTransport: fake.transport });

@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 const env = vi.hoisted(() => ({ isApp: false }))
 vi.mock('./api.js', () => ({
   get isApp() { return env.isApp },
-  api: { oauthBegin: vi.fn(), oauthComplete: vi.fn(), connectors: vi.fn(), linkConnector: vi.fn(), setClientId: vi.fn(), removeClientId: vi.fn() },
+  api: { oauthBegin: vi.fn(), oauthComplete: vi.fn(), connectors: vi.fn(), linkConnector: vi.fn(), setClientId: vi.fn(), removeClientId: vi.fn(), syncConnector: vi.fn() },
 }))
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: vi.fn() }))
 let deliver = null
@@ -172,4 +172,42 @@ it('Settings provides a Library back destination for both native and HTML naviga
   expect(screen.getByRole('link', { name: 'Back to Library' }).getAttribute('href')).toBe('#/')
   expect(useNativeBack).toHaveBeenCalledWith('#/')
   await waitFor(() => expect(api.connectors).toHaveBeenCalled())
+})
+
+describe('service delivery status', () => {
+  const reader = { ...session, username: 'reader' }
+  const connector = (extra = {}) => ({ id: 'bookorbit', name: 'BookOrbit', linked: true,
+    status: 'ok', queue: { pending: 0, dead: 0 }, ...extra })
+  const renderSettings = () => render(<Settings session={reader} theme={['system', vi.fn()]} onSession={vi.fn()} onLogout={vi.fn()} />)
+
+  it('shows queued items and saved clipping failures in Settings', async () => {
+    api.connectors.mockResolvedValue({ connectors: [connector({ queue: { pending: 2, dead: 1 },
+      queue_errors: [{ kind: 'clipping', count: 1, message: 'clipping has no position (update the reader firmware)' }] })] })
+    renderSettings()
+    expect(await screen.findByText('2 items waiting to sync · 1 item failed')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('1 clipping: clipping has no position')
+  })
+
+  it('labels the queued count as items rather than books', async () => {
+    const { notify } = await import('./ui.jsx')
+    api.connectors.mockResolvedValue({ connectors: [connector()] })
+    api.syncConnector.mockResolvedValue({ queued: 36 })
+    renderSettings()
+    fireEvent.click(await screen.findByRole('button', { name: 'Sync BookOrbit now' }))
+    await waitFor(() => expect(notify).toHaveBeenCalledWith({ title: 'Syncing to BookOrbit', detail: '36 items queued' }))
+  })
+
+  it('refreshes pending delivery status and stops polling after the queue finishes', async () => {
+    vi.useFakeTimers()
+    api.connectors.mockResolvedValueOnce({ connectors: [connector({ queue: { pending: 1, dead: 0 } })] })
+      .mockResolvedValue({ connectors: [connector({ queue: { pending: 0, dead: 1 },
+        queue_errors: [{ kind: 'clipping', count: 1, message: 'clipping text not found' }] })] })
+    await act(async () => renderSettings())
+    expect(screen.getByText('1 item waiting to sync')).toBeTruthy()
+    await act(async () => vi.advanceTimersByTimeAsync(5000))
+    expect(screen.getByText('1 item failed')).toBeTruthy()
+    expect(screen.getByRole('alert').textContent).toContain('clipping text not found')
+    await act(async () => vi.advanceTimersByTimeAsync(15000))
+    expect(api.connectors).toHaveBeenCalledTimes(2)
+  })
 })

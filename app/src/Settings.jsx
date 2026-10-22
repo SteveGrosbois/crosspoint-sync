@@ -511,7 +511,7 @@ function Service({ session, conn, onChange }) {
                   const r = await api.syncConnector(session, conn.id)
                   notify({
                     title: `Syncing to ${conn.name}`,
-                    detail: r?.queued ? `${r.queued} book${r.queued === 1 ? '' : 's'} queued` : 'Everything is up to date',
+                    detail: r?.queued ? `${r.queued} item${r.queued === 1 ? '' : 's'} queued` : 'No synced items to queue',
                   })
                 })
               }
@@ -538,6 +538,21 @@ function Service({ session, conn, onChange }) {
           </button>
         )}
       </div>
+      {conn.linked && (conn.queue?.pending > 0 || conn.queue?.dead > 0) && (
+        <p role="status" className="mt-2 text-xs text-stone-500">
+          {[conn.queue.pending > 0 && `${conn.queue.pending} item${conn.queue.pending === 1 ? '' : 's'} waiting to sync`,
+            conn.queue.dead > 0 && `${conn.queue.dead} item${conn.queue.dead === 1 ? '' : 's'} failed`].filter(Boolean).join(' · ')}
+        </p>
+      )}
+      {conn.linked && conn.queue_errors?.length > 0 && (
+        <div role="alert" className="mt-2 space-y-1 text-xs text-red-700">
+          {conn.queue_errors.map((e) => (
+            <p key={`${e.kind}:${e.message}`}>
+              {e.count} {e.kind === 'clipping' ? 'clipping' : 'progress update'}{e.count === 1 ? '' : 's'}: {e.message}
+            </p>
+          ))}
+        </div>
+      )}
       {conn.linked && !needsRelink && conn.options && (
         <Options conn={conn} save={(v) => act('options', () => api.setConnectorOptions(session, conn.id, v))} />
       )}
@@ -584,7 +599,15 @@ function Options({ conn, save }) {
 }
 
 function Services({ session }) {
-  const [data, error, reload] = useLoad(() => api.connectors(session), [session], `connectors ${session.username}@${session.server}`)
+  const [data, error, reload, loading] = useLoad(() => api.connectors(session), [session], `connectors ${session.username}@${session.server}`)
+  const reloadRef = useRef(reload)
+  reloadRef.current = reload
+  const pending = data?.connectors?.some((c) => c.linked && c.queue?.pending > 0)
+  useEffect(() => {
+    if (!pending || loading) return
+    const timer = setTimeout(() => reloadRef.current(), 5000)
+    return () => clearTimeout(timer)
+  }, [pending, loading, data])
   if (error && !data) return <p className="py-4 text-sm text-stone-500">Couldn&apos;t load services ({error.message}).</p>
   if (!data) return <Loader2 className="mx-auto my-6 size-5 animate-spin text-stone-400" />
   if (data.encryption === 'disabled') {

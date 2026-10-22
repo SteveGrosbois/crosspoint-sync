@@ -1,6 +1,6 @@
 import { decideMatch, extractTitleAuthor, type Candidate } from './matching.js';
 import { baseUrl } from './audiobookshelf.js';
-import { cachedEpub, epubPosition, epubRangeCfi, epubRangeOffsets, epubXPath, withEpubMap, type Epub } from './bookfusion-epub.js';
+import { cachedEpub, epubPosition, epubQuoteRangeCfi, epubRangeCfi, epubRangeOffsets, epubXPath, normalizeEpubQuote, withEpubMap, type Epub } from './bookfusion-epub.js';
 import {
   ConnectorOperationError,
   type Connector,
@@ -283,7 +283,7 @@ function result(status: number): PushResult {
 }
 
 // Whitespace and soft hyphens differ between the firmware's clipping text and the raw EPUB text.
-const squash = (t: string) => t.replace(/[\s\u00ad]+/g, '');
+const squash = normalizeEpubQuote;
 
 /**
  * Clippings become BookOrbit highlights at the exact spot: the firmware's chapter
@@ -291,11 +291,12 @@ const squash = (t: string) => t.replace(/[\s\u00ad]+/g, '');
  * Re-sent clippings update the note on the existing annotation instead of duplicating it.
  */
 async function pushHighlight(http: HttpTransport, c: OrbitCred, m: Match, file: string, h: NonNullable<OutboundEvent['highlight']>): Promise<PushResult> {
-  if (h.spine == null || h.startOffset == null || h.endOffset == null) {
-    return { ok: false, retryable: false, error: 'clipping has no position (update the reader firmware)' };
-  }
-  const { cfi, text } = await epubRangeCfi(await epub(http, c, file), h.spine, h.startOffset, h.endOffset);
-  if (!squash(text).startsWith(squash(h.text).slice(0, 40))) {
+  const bookBytes = await epub(http, c, file);
+  const positioned = h.spine != null && h.startOffset != null && h.endOffset != null;
+  const { cfi, text } = positioned
+    ? await epubRangeCfi(bookBytes, h.spine!, h.startOffset!, h.endOffset!)
+    : await epubQuoteRangeCfi(bookBytes, h.text);
+  if (positioned && !squash(text).startsWith(squash(h.text).slice(0, 40))) {
     return { ok: false, retryable: false, error: 'clipping text not found at its position in the BookOrbit copy of the book' };
   }
   const book = encodeURIComponent(m.externalId);

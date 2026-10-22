@@ -1,7 +1,7 @@
 import { crc32, gunzipSync } from 'node:zlib';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  bookFusionEpub, clearBookFusionEpubCache, epubPosition, epubRangeCfi, epubRangeOffsets, epubXPath, loadEpubMap, redactEpub,
+  bookFusionEpub, clearBookFusionEpubCache, epubPosition, epubQuoteRangeCfi, epubRangeCfi, epubRangeOffsets, epubXPath, loadEpubMap, redactEpub,
 } from '../src/connectors/bookfusion-epub.js';
 import { bookfusionConnector } from '../src/connectors/bookfusion.js';
 import { bookorbitConnector } from '../src/connectors/bookorbit.js';
@@ -580,6 +580,50 @@ describe('epubRangeCfi (CrossPoint clipping offsets)', () => {
 });
 
 describe('bookorbit highlights', () => {
+  it('locates a unique full quote for a saved clipping without offsets', async () => {
+    const o = orbit();
+    const event = ev('bold tail', 'old note');
+    delete (event.highlight as Partial<typeof event.highlight>).startOffset;
+    delete (event.highlight as Partial<typeof event.highlight>).endOffset;
+    expect(await bookorbitConnector.push(CRED, MATCH, event, o.http)).toEqual({ ok: true });
+    const post = o.calls.find((c) => c.method === 'POST' && c.url.endsWith('/books/12/annotations'))!;
+    expect(JSON.parse(post.body!)).toMatchObject({ cfi: 'epubcfi(/8/4!/6/4,/2/1:0,/3:5)', text: 'bold tail', note: 'old note' });
+  });
+
+  it('matches visible Unicode text across inline nodes and ignores whitespace and soft hyphens', async () => {
+    const bytes = epub('<script>wrong</script><p>😀<b>bold</b>\u00ad  tail</p>');
+    const range = await epubQuoteRangeCfi(bytes, '😀bold tail');
+    const at = await epubRangeOffsets(bytes, range.cfi);
+    expect(at).toMatchObject({ spine: 1, start: 0, end: 12 });
+    expect(range.text.replace(/[\s\u00ad]+/g, '')).toBe('😀boldtail');
+  });
+
+  it('refuses ambiguous quotes within or across chapters instead of choosing a highlight location', async () => {
+    await expect(epubQuoteRangeCfi(epub('<p>same quote</p><p>same quote</p>'), 'same quote'))
+      .rejects.toThrow('appears more than once');
+    await expect(epubQuoteRangeCfi(epub('<p>First</p>'), 'First')).rejects.toThrow('appears more than once');
+    await expect(epubQuoteRangeCfi(epub(), 'absent quote')).rejects.toThrow('clipping text not found');
+  });
+
+  it('resolves equivalent straight and curly quotation marks without changing the source offsets', async () => {
+    const bytes = epub('<p>“It’s fine,” she said.</p>');
+    const range = await epubQuoteRangeCfi(bytes, '"It\'s fine," she said.');
+    expect(range.text).toBe('“It’s fine,” she said.');
+    expect((await epubRangeOffsets(bytes, range.cfi)).start).toBe(0);
+    await expect(epubQuoteRangeCfi(epub('<p>“fine”</p><p>"fine"</p>'), '"fine"')).rejects.toThrow('appears more than once');
+  });
+
+  it('locates an entire long legacy quote across edition punctuation and case differences', async () => {
+    const old = '"I can\'t remember things as I used—and I do not keep the same size for ten minutes together!"';
+    const publisher = '“I ca’n’t remember things as I used; and I do not keep the same size for ten minutes TOGETHER!”';
+    const range = await epubQuoteRangeCfi(epub(`<p>${publisher}</p>`), old);
+    expect(range.text).toContain('ca’n’t remember things');
+    expect(range.text).toContain('minutes TOGETHER');
+    await expect(epubQuoteRangeCfi(epub(`<p>${publisher}</p><p>${publisher}</p>`), old))
+      .rejects.toThrow('appears more than once');
+    await expect(epubQuoteRangeCfi(epub('<p>Hello, WORLD!</p>'), 'Hello world')).rejects.toThrow('clipping text not found');
+  });
+
   const CRED = { server: 'orbit.test', username: 'hl', password: 'pw' };
   const MATCH = { externalId: '12', externalEdition: '71', confidence: 1 };
   const LOGIN = { accessToken: 'at', accessTokenExpiresAt: new Date(Date.now() + 900_000).toISOString() };
