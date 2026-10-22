@@ -39,7 +39,7 @@ async function matchingIds(cred: Credential, http: HttpTransport, row: Export): 
 }
 
 /** Called inside the per-user stats worker lock, before history reconciliation. */
-export async function exportBookorbitSessions(db: DB, userId: number, http: HttpTransport): Promise<void> {
+export async function exportBookorbitSessions(db: DB, userId: number, http: HttpTransport, document?: string): Promise<void> {
   const account = getAccount(db, userId, 'bookorbit');
   if (!account?.enabled || account.status !== 'ok') return;
   const cred = decryptCredential(account, db);
@@ -53,13 +53,16 @@ export async function exportBookorbitSessions(db: DB, userId: number, http: Http
   // Create stable outbound identities even if this service is not yet matched.
   db.prepare(`INSERT INTO bookorbit_session_exports (user_id, device_id, session_id, destination, export_id)
     SELECT s.user_id, s.device_id, s.session_id, ?, lower(hex(randomblob(16))) FROM reading_sessions s WHERE s.user_id=?
+    AND (? IS NULL OR s.document=? OR s.document IN (SELECT alias FROM document_aliases WHERE user_id=s.user_id AND document=?))
     AND NOT EXISTS (SELECT 1 FROM bookorbit_session_exports e WHERE e.user_id=s.user_id
       AND e.device_id=s.device_id AND e.session_id=s.session_id AND e.destination=?) LIMIT 100
-    ON CONFLICT DO NOTHING`).run(destination, userId, destination);
+    ON CONFLICT DO NOTHING`).run(destination, userId, document ?? null, document ?? null, document ?? null, destination);
   const rows = db.prepare(`SELECT s.*, e.destination, e.export_id, e.external_id, e.file_id, e.prior_ids, e.remote_id, e.payload
     FROM reading_sessions s JOIN bookorbit_session_exports e USING(user_id, device_id, session_id)
     WHERE s.user_id=? AND e.destination=? AND e.exported_seconds < s.seconds
-    ORDER BY e.attempted_at, s.created_at LIMIT 5`).all(userId, destination) as unknown as Export[];
+    AND (? IS NULL OR s.document=? OR s.document IN (SELECT alias FROM document_aliases WHERE user_id=s.user_id AND document=?))
+    ORDER BY e.attempted_at, s.created_at LIMIT ?`).all(userId, destination, document ?? null, document ?? null, document ?? null,
+      document ? 100 : 5) as unknown as Export[];
   for (const row of rows) {
     if (!current()) return;
     const key = [userId, row.device_id, row.session_id, destination];

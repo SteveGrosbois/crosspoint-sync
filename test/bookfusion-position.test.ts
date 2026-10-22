@@ -638,6 +638,7 @@ describe('bookorbit highlights', () => {
         body: new ReadableStream({ start(controller) { controller.enqueue(epub()); controller.close(); } }),
       };
       if (url.endsWith('/books/12/annotations') && init.method === 'GET') return json(existing);
+      if (url.endsWith('/books/12/progress') && init.method === 'GET') return json([]);
       return json({});
     };
     return { http, calls };
@@ -668,6 +669,12 @@ describe('bookorbit highlights', () => {
     const r = await bookorbitConnector.push(CRED, MATCH, ev('something else'), o.http);
     expect(r).toMatchObject({ ok: false, retryable: false });
     expect(o.calls.some((c) => c.url.includes('/annotations'))).toBe(false);
+  });
+
+  it('does not duplicate an imported highlight with an equivalent CFI', async () => {
+    const o = orbit([{ id: 5, jumpFileId: 71, cfi: 'epubcfi(/8/4[b]!/6,/4/2/1:0,/4/3:5)', text: 'bold tail', note: null }]);
+    expect(await bookorbitConnector.push(CRED, MATCH, ev('bold tail'), o.http)).toEqual({ ok: true });
+    expect(o.calls.some((c) => c.method === 'POST' && c.url.includes('/annotations'))).toBe(false);
   });
 
   it('maps a range CFI back to the clipping\'s chapter offsets', async () => {

@@ -204,6 +204,7 @@ export const api = {
   linkConnector: (s, id, credential) => call(s, `/api/v1/connectors/${id}`, { method: 'PUT', body: JSON.stringify({ credential }) }),
   unlinkConnector: (s, id) => call(s, `/api/v1/connectors/${id}`, { method: 'DELETE' }),
   syncConnector: (s, id) => call(s, `/api/v1/connectors/${id}/sync`, { method: 'POST' }),
+  syncBookorbitBook: (s, doc) => call(s, `/api/v1/connectors/bookorbit/sync/${doc}`, { method: 'POST' }),
   setConnectorOptions: (s, id, options) => call(s, `/api/v1/connectors/${id}/options`, { method: 'PUT', body: JSON.stringify(options) }),
   beginLink: (s, id) => call(s, `/api/v1/connectors/${id}/link/begin`, { method: 'POST' }),
   // Browser sign-in (OAuth): the server holds PKCE; the app finishes it only when its app link catches the redirect.

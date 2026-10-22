@@ -128,13 +128,13 @@ async function getJson(http: HttpTransport, c: OrbitCred, path: string): Promise
   }
 }
 
-/** Stats reads must distinguish an empty history from a failed request. */
+/** Sync reads must distinguish empty remote data from a failed request. */
 export async function bookorbitStatsJson(cred: Credential, http: HttpTransport, path: string): Promise<any> {
   const c = parseCred(cred);
   if (!c) throw new ConnectorOperationError('invalid BookOrbit credentials', false, true);
   const res = await call(http, c, 'GET', path);
   if (res.status < 200 || res.status >= 300) {
-    throw new ConnectorOperationError(`BookOrbit stats request failed (${res.status})`,
+    throw new ConnectorOperationError(`BookOrbit request failed (${res.status})`,
       res.status === 429 || res.status >= 500, res.status === 401 || res.status === 403);
   }
   return res.json();
@@ -221,8 +221,8 @@ async function pullProgress(
 ): Promise<InboundChange | null> {
   const c = parseCred(cred);
   if (!c) return null;
-  const rows = await getJson(http, c, `/books/${encodeURIComponent(m.externalId)}/progress`);
-  if (!Array.isArray(rows)) return null;
+  const rows = await bookorbitStatsJson(cred, http, `/books/${encodeURIComponent(m.externalId)}/progress`);
+  if (!Array.isArray(rows)) throw new ConnectorOperationError('BookOrbit returned invalid progress', true);
   const row = rows.find((r: any) => String(r?.fileId) === m.externalEdition) ?? rows[0];
   if (!row || typeof row.percentage !== 'number') return null;
   const updatedAtMs = row.updatedAt ? Date.parse(row.updatedAt) : NaN;
@@ -263,7 +263,8 @@ async function pullHighlights(
 ): Promise<InboundHighlight[]> {
   const c = parseCred(cred);
   if (!c) return [];
-  const rows = await getJson(http, c, `/books/${encodeURIComponent(m.externalId)}/annotations`);
+  const rows = await bookorbitStatsJson(cred, http, `/books/${encodeURIComponent(m.externalId)}/annotations`);
+  if (!Array.isArray(rows)) throw new ConnectorOperationError('BookOrbit returned invalid highlights', true);
   const out: InboundHighlight[] = [];
   for (const a of Array.isArray(rows) ? rows : []) {
     if (typeof a?.cfi !== 'string' || typeof a.text !== 'string' || skip(a.text)) continue;
@@ -309,8 +310,20 @@ async function pushHighlight(http: HttpTransport, c: OrbitCred, m: Match, file: 
     return { ok: false, retryable: false, error: 'clipping text not found at its position in the BookOrbit copy of the book' };
   }
   const book = encodeURIComponent(m.externalId);
-  const existing = await getJson(http, c, `/books/${book}/annotations`);
-  const same = (Array.isArray(existing) ? existing : []).find((a: any) => a?.cfi === cfi);
+  const existing = await bookorbitStatsJson(c, http, `/books/${book}/annotations`);
+  if (!Array.isArray(existing)) throw new ConnectorOperationError('BookOrbit returned invalid highlights', true);
+  let same = existing.find((a: any) => a?.cfi === cfi);
+  // Imported CFIs may include ID assertions or use another equivalent range
+  // spelling. Compare their actual offsets before creating a duplicate on push.
+  if (!same && existing.length) {
+    const target = await epubRangeOffsets(bookBytes, cfi);
+    for (const a of existing) {
+      if (typeof a?.cfi !== 'string' || typeof a.text !== 'string' || squash(a.text) !== squash(h.text)) continue;
+      if (a.jumpFileId != null && String(a.jumpFileId) !== file) continue;
+      const at = await epubRangeOffsets(bookBytes, a.cfi).catch(() => null);
+      if (at && at.spine === target.spine && at.start === target.start && at.end === target.end) { same = a; break; }
+    }
+  }
   if (same) {
     if ((same.note ?? null) === (h.note ?? null)) return { ok: true };
     return result((await call(http, c, 'PATCH', `/books/${book}/annotations/${encodeURIComponent(same.id)}`, { note: h.note ?? null })).status);
@@ -336,6 +349,16 @@ async function push(
     const finished = ev.kind === 'finished' || pct >= 0.999;
     const file = m.externalEdition ?? (await fileId(http, c, m.externalId));
     if (!file) return { ok: false, retryable: false, error: 'book has no EPUB file in BookOrbit' };
+
+    // Backfills and delayed queue jobs retain the original reading timestamp.
+    // Do not replace a position saved more recently by another reader.
+    const remote = await call(http, c, 'GET', `/books/${encodeURIComponent(m.externalId)}/progress`);
+    if (remote.status !== 200) return result(remote.status);
+    const rows = await remote.json();
+    if (!Array.isArray(rows)) return { ok: false, retryable: true, error: 'BookOrbit returned invalid progress' };
+    const current = rows.find((row: any) => String(row?.fileId) === file);
+    const updated = current?.updatedAt ? Date.parse(current.updatedAt) : NaN;
+    if (Number.isFinite(updated) && Math.floor(updated / 1000) > ev.timestamp) return { ok: true };
 
     // Enough precision that pulling our own write back reads as the same position, not an edit.
     const body: Record<string, unknown> = { percentage: Math.round((finished ? 1 : pct) * 1_000_000) / 10_000 };

@@ -102,33 +102,40 @@ async function importBook(
   }
 }
 
-// Share overlapping startup, scheduled, and "Sync now" runs for a given database/user.
+interface ImportOptions { document?: string; force?: boolean; throwOnError?: boolean }
+// Serialize exports/imports per account; scoped requests must not share another book's result.
 const pending = new WeakMap<DB, Map<number, Promise<number>>>();
-export function importBookorbitStats(db: DB, userId: number, http: HttpTransport = fetchTransport): Promise<number> {
+export function importBookorbitStats(db: DB, userId: number, http: HttpTransport = fetchTransport, options: ImportOptions = {}): Promise<number> {
   let users = pending.get(db);
   if (!users) { users = new Map(); pending.set(db, users); }
   const existing = users.get(userId);
-  if (existing) return existing;
-  const run = importAccount(db, userId, http).finally(() => users!.delete(userId));
+  if (existing) return options.document
+    ? existing.catch(() => 0).then(() => importBookorbitStats(db, userId, http, options)) : existing;
+  const run = importAccount(db, userId, http, options).finally(() => users!.delete(userId));
   users.set(userId, run);
   return run;
 }
 
-async function importAccount(db: DB, userId: number, http: HttpTransport): Promise<number> {
+async function importAccount(db: DB, userId: number, http: HttpTransport, options: ImportOptions): Promise<number> {
   const account = getAccount(db, userId, 'bookorbit');
   if (!account?.enabled || account.status !== 'ok') return 0;
   // Each request has its own deadline; imports run outside device progress requests.
   const bounded: HttpTransport = (url, init) => http(url, { ...init,
     signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000) });
   try {
-    await exportBookorbitSessions(db, userId, bounded);
+    if (options.force && options.document) {
+      db.prepare(`UPDATE bookorbit_stats_sync SET refreshed_at=0 WHERE user_id=? AND external_id IN
+        (SELECT external_id FROM connector_matches WHERE user_id=? AND connector_id='bookorbit' AND document=?)`)
+        .run(userId, userId, options.document);
+    }
+    await exportBookorbitSessions(db, userId, bounded, options.document);
     const cred = decryptCredential(account, db);
     // Include old/finished books already known to Sync, not just today's open book.
     const unmatched = db.prepare(`SELECT d.document FROM documents d WHERE d.user_id = ?
       AND NOT EXISTS (SELECT 1 FROM connector_matches m WHERE m.user_id = d.user_id
         AND m.connector_id = 'bookorbit' AND m.document = d.document)
-      AND (d.title IS NOT NULL OR d.filename IS NOT NULL) ORDER BY d.document LIMIT 3`)
-      .all(userId) as { document: string }[];
+      AND (d.title IS NOT NULL OR d.filename IS NOT NULL) AND (? IS NULL OR d.document=?) ORDER BY d.document LIMIT 3`)
+      .all(userId, options.document ?? null, options.document ?? null) as { document: string }[];
     for (const d of unmatched) {
       if (getAccount(db, userId, 'bookorbit')?.cred_enc !== account.cred_enc) return 0;
       await resolveMatch(db, 'bookorbit', userId, d.document, bounded);
@@ -136,6 +143,7 @@ async function importAccount(db: DB, userId: number, http: HttpTransport): Promi
     const books = db.prepare(`SELECT DISTINCT m.external_id FROM connector_matches m
       LEFT JOIN bookorbit_stats_sync s ON s.user_id = m.user_id AND s.external_id = m.external_id
       WHERE m.user_id = ? AND m.connector_id = 'bookorbit' AND m.external_id IS NOT NULL
+        AND (? IS NULL OR m.document=?)
         AND NOT EXISTS (SELECT 1 FROM bookorbit_session_exports e
           JOIN bookorbit_session_destination dest ON dest.user_id=e.user_id AND dest.destination=e.destination
           JOIN reading_sessions local USING(user_id, device_id, session_id)
@@ -143,7 +151,7 @@ async function importAccount(db: DB, userId: number, http: HttpTransport): Promi
             AND (e.remote_id IS NULL OR e.exported_seconds < local.seconds))
         AND (s.refreshed_at IS NULL OR s.cutoff IS NOT NULL OR s.refreshed_at <= ?)
       ORDER BY COALESCE(s.attempted_at, 0), m.external_id LIMIT ?`)
-      .all(userId, nowSeconds() - REFRESH_SECONDS, BOOKS_PER_PASS) as { external_id: string }[];
+      .all(userId, options.document ?? null, options.document ?? null, nowSeconds() - REFRESH_SECONDS, BOOKS_PER_PASS) as { external_id: string }[];
     if (!books.length) return 0;
     const me = await bookorbitStatsJson(cred, bounded, '/auth/me');
     let timezone = typeof me?.settings?.timezone === 'string' ? me.settings.timezone : 'UTC';
@@ -168,6 +176,7 @@ async function importAccount(db: DB, userId: number, http: HttpTransport): Promi
         }
         console.error(JSON.stringify({ msg: 'BookOrbit stats import failed', user_id: userId,
           error: err instanceof Error ? err.message : 'invalid history' }));
+        if (options.throwOnError) throw err;
       }
     }
     return imported;
@@ -178,6 +187,7 @@ async function importAccount(db: DB, userId: number, http: HttpTransport): Promi
     }
     console.error(JSON.stringify({ msg: 'BookOrbit stats import failed', user_id: userId,
       error: err instanceof Error ? err.message : 'request failed' }));
+    if (options.throwOnError) throw err;
     return 0;
   }
 }

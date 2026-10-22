@@ -7,7 +7,6 @@ import { loadSessionSecret } from './auth/session.js';
 import { startQueueWorker } from './connectors/runner.js';
 import { pollSpotify, startFanInWorker } from './connectors/fanin.js';
 import { autoPause } from './models/pause.js';
-import { pollBookorbitStats } from './connectors/bookorbit-stats.js';
 
 const DATABASE_PATH = process.env.DATABASE_PATH ?? '/data/crosspoint.db';
 const PORT = Number(process.env.PORT ?? 8080);
@@ -28,8 +27,6 @@ if (connectorsEnabled) {
   // Audiobookshelf audiobook -> ebook).
   startFanInWorker(db, Number(process.env.FANIN_INTERVAL_MS ?? 5 * 60_000));
   startFanInWorker(db, 60 * 60_000, pollSpotify);
-  startFanInWorker(db, 60_000, pollBookorbitStats);
-  void pollBookorbitStats(db);
 }
 // Daily: pause books with no progress for 30 days (reads also check lazily).
 startFanInWorker(db, 24 * 60 * 60_000, async (d) => autoPause(d));

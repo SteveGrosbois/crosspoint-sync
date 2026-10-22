@@ -8,6 +8,7 @@ and any KOReader device.
 - **Better multi-device sync.** Progress is stored per device and the newest position wins, fixing
   the ping-pong you get with stock kosync servers.
 - **Server-side service connectors.** Link services such as Hardcover, Micro.blog, Audiobookshelf, BookOrbit, and Readwise Reader once; readers continue speaking standard KOSync while the server updates external reading state.
+- **BookOrbit on demand.** Reader progress requests fetch the matched book’s latest progress and highlights. On a book’s page, **Connected services → BookOrbit → Sync now** pulls before queueing outbound updates and refreshes that book’s reading history. BookOrbit has no periodic polling; reading-session uploads trigger delivery directly.
 - **Lossless CrossPoint sync.** An extended API carries the full CrossPoint position (spine,
   paragraph, anchor, page hints), not just a lossy xpath + percentage.
 - **Bookmarks, clippings, and reading stats.** Delta sync with tombstones for bookmarks and

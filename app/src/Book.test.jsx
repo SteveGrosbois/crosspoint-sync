@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 vi.hoisted(() => {
   window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
 })
-vi.mock('./api.js', () => ({ isApp: false, api: { setStatus: vi.fn(), merge: vi.fn() } }))
+vi.mock('./api.js', () => ({ isApp: false, api: { setStatus: vi.fn(), merge: vi.fn(), syncBookorbitBook: vi.fn() } }))
 const loads = vi.hoisted(() => ({}))
 vi.mock('./ui.jsx', async (original) => ({ ...await original(), useLoad: (fn, deps, memo) => [loads[memo] ?? null] }))
 vi.mock('./tabbar.js', () => ({ useSheet() {}, useNativeBack() {}, useNativeButton() {} }))
@@ -15,6 +15,33 @@ import { api } from './api.js'
 
 const book = { document: 'book', title: 'Middlemarch', status: 'reading', percentage: 0.62, cover_url: '/cover.jpg' }
 afterEach(() => { cleanup(); vi.clearAllMocks() })
+
+it('syncs just this book, disables repeat clicks and refreshes its details', async () => {
+  loads['matches book'] = [{ id: 'bookorbit', name: 'BookOrbit', matched: true }]
+  let finish
+  api.syncBookorbitBook.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
+  const onChange = vi.fn()
+  render(<Book session={{}} book={book} books={[book]} onChange={onChange} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
+  expect(screen.getByRole('button', { name: 'Syncing…' }).disabled).toBe(true)
+  expect(api.syncBookorbitBook).toHaveBeenCalledWith({}, 'book')
+  finish({ queued: 1 })
+  await waitFor(() => expect(onChange).toHaveBeenCalledOnce())
+  expect(screen.getByRole('status').textContent).toContain('Outgoing updates queued')
+  delete loads['matches book']
+})
+
+it('shows a failed sync and allows retry without reporting success', async () => {
+  loads['matches book'] = [{ id: 'bookorbit', name: 'BookOrbit', matched: true }]
+  api.syncBookorbitBook.mockRejectedValue(new Error('BookOrbit unavailable'))
+  const onChange = vi.fn()
+  render(<Book session={{}} book={book} books={[book]} onChange={onChange} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
+  expect((await screen.findByRole('alert')).textContent).toBe('BookOrbit unavailable')
+  expect(screen.getByRole('button', { name: 'Sync now' }).disabled).toBe(false)
+  expect(onChange).not.toHaveBeenCalled()
+  delete loads['matches book']
+})
 
 it('saves the chosen status and refreshes the book', async () => {
   const onChange = vi.fn()

@@ -19,6 +19,7 @@ import type { HttpTransport } from '../../connectors/types.js';
 import { bookorbitExclusions, readBookorbitStats } from '../../models/bookorbit-stats.js';
 
 import { parseReadingSession } from '../../models/reading-sessions.js';
+import { importBookorbitStats } from '../../connectors/bookorbit-stats.js';
 
 const MAX_BOOK_BATCH = 20;
 const MAX_INFO_LOOKUPS = 25;
@@ -64,6 +65,9 @@ export function statsRoutes(db: DB, http?: HttpTransport): Hono<AppEnv> {
       for (const s of items) insert.run(userId, deviceId, s.session_id, s.document, s.started_at,
         s.ended_at, s.seconds, s.utc_offset_minutes, now);
     });
+    for (const document of new Set<string>(items.map((s: any) => resolveDocument(db, userId, s.document)))) {
+      void importBookorbitStats(db, userId, http, { document }).catch(() => {});
+    }
     return c.json({ until: now, accepted_session_ids: items.map((s: any) => s.session_id) });
   });
 

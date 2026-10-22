@@ -33,6 +33,8 @@ import {
 import { isValidDocument } from '../kosync.js';
 import { ConnectorOperationError, type HttpTransport } from '../../connectors/types.js';
 import { importBookorbitStats } from '../../connectors/bookorbit-stats.js';
+import { resolveDocument } from '../../models/merge.js';
+import { hasDocumentData } from '../../models/document.js';
 
 /** Where a provider sends the browser back: one https URL for web and native (an app link there). */
 export const oauthCallbackPath = (id: string) => `/connectors/${id}/callback`;
@@ -480,6 +482,45 @@ export function connectorRoutes(
       void importBookorbitStats(db, user.id, transport);
     }
     return c.json({ queued });
+  });
+
+  // One matched book: pull remote state before queueing local updates.
+  app.post('/connectors/bookorbit/sync/:document', async (c) => {
+    const raw = c.req.param('document');
+    if (!isValidDocument(raw)) return kosyncError(c, 403, 2004, "Field 'document' not provided.");
+    const userId = c.get('user').id;
+    const document = resolveDocument(db, userId, raw);
+    if (!hasDocumentData(db, userId, document)) return c.json({ message: 'Book not found' }, 404);
+    const account = getAccount(db, userId, 'bookorbit');
+    if (!account?.enabled || account.status !== 'ok') return c.json({ message: 'Connect BookOrbit before syncing this book' }, 400);
+    const signal = AbortSignal.timeout(30_000);
+    const bounded: HttpTransport = (url, init) => transport(url, { ...init,
+      signal: init.signal ? AbortSignal.any([signal, init.signal]) : signal });
+    try {
+      const match = await resolveMatch(db, 'bookorbit', userId, document, bounded);
+      if (!match) return c.json({ message: 'Match this book to BookOrbit before syncing' }, 400);
+      // Await both remote position and highlights before enqueueing any backfill.
+      const applied = await pollConnector(db, userId, 'bookorbit', bounded, { document, signal, throwOnError: true });
+      const fresh = getAccount(db, userId, 'bookorbit');
+      if (!fresh?.enabled || fresh.status !== 'ok' || fresh.cred_enc !== account.cred_enc ||
+          getMatch(db, userId, 'bookorbit', document)?.external_id !== match.externalId) {
+        return c.json({ message: 'BookOrbit connection changed; try again' }, 409);
+      }
+      await importBookorbitStats(db, userId, bounded, { document, force: true, throwOnError: true });
+      signal.throwIfAborted();
+      const finalAccount = getAccount(db, userId, 'bookorbit');
+      const finalMatch = getMatch(db, userId, 'bookorbit', document);
+      if (!finalAccount?.enabled || finalAccount.status !== 'ok' || finalAccount.cred_enc !== account.cred_enc ||
+          finalMatch?.external_id !== match.externalId || finalMatch.external_edition !== match.externalEdition) {
+        return c.json({ message: 'BookOrbit connection changed; try again' }, 409);
+      }
+      const queued = backfillConnector(db, userId, 'bookorbit', document);
+      const history = db.prepare('SELECT active_generation, cutoff FROM bookorbit_stats_sync WHERE user_id=? AND external_id=?')
+        .get(userId, match.externalId);
+      return c.json({ applied, queued, history_pending: !history?.active_generation || history.cutoff !== null });
+    } catch (err) {
+      return c.json({ message: err instanceof Error ? err.message : 'BookOrbit sync failed' }, 502);
+    }
   });
 
   // Unlink and wipe queued work + matches.

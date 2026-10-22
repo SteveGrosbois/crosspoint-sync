@@ -11,13 +11,19 @@ beforeEach(() => { process.env.TOKEN_ENC_KEY='c'.repeat(64); resetEncryptionKeyC
 afterEach(() => { delete process.env.TOKEN_ENC_KEY; resetEncryptionKeyCache(); });
 const record = { session_id:'session1', document:DOC, started_at:1609502400, ended_at:1609503000, seconds:600, utc_offset_minutes:0 };
 const cred = { server:'https://orbit.example', username:'reader', password:'secret' };
-async function fixture() {
-  const {app,db}=makeTestApp(); const user=await registerUser(app);
+async function fixture(autoSync = false) {
+  const {app,db}=makeTestApp({}, { connectorTransport: (url, init) => http(url, init) }); const user=await registerUser(app);
   const id=(db.prepare('SELECT id FROM users WHERE username=?').get(user.username) as any).id;
   upsertAccount(db,id,'bookorbit',cred,'reader');
   saveMatch(db,id,'bookorbit',DOC,{externalId:'7',externalEdition:'9',confidence:1},'manual');
-  const submit=(items:unknown[]=[record], device='reader1')=>app.request('/api/v1/stats/sessions',{
-    method:'PUT',headers:user.headers,body:JSON.stringify({device_id:device,items}) });
+  const submit=async(items:unknown[]=[record], device='reader1')=>{
+    // Export round-trip tests drive reconciliation explicitly.
+    if (!autoSync) db.prepare('UPDATE connector_accounts SET enabled=0 WHERE user_id=?').run(id);
+    const response=await app.request('/api/v1/stats/sessions',{
+      method:'PUT',headers:user.headers,body:JSON.stringify({device_id:device,items}) });
+    if (!autoSync) db.prepare('UPDATE connector_accounts SET enabled=1 WHERE user_id=?').run(id);
+    return response;
+  };
   const remote:any[]=[];const saved=new Map<string,number>();const posts:any[]=[];
   let lost=false; let brokenList=false; let ambiguous=false;
   const http:HttpTransport=async(url,init)=>{
@@ -50,6 +56,18 @@ async function fixture() {
 }
 
 describe('device session ingestion',()=>{
+  it('delivers uploaded sessions without a periodic poll',async()=>{
+    const f=await fixture(true); await f.submit();
+    await importBookorbitStats(f.db,f.id,f.http); // await the already-started job
+    expect(f.posts).toHaveLength(1);
+  });
+  it('delivers an uploaded batch larger than the old periodic worker limit',async()=>{
+    const f=await fixture(true);
+    await f.submit(Array.from({length:8},(_,i)=>({...record,session_id:`batch${i}`,
+      started_at:record.started_at+i*1000,ended_at:record.ended_at+i*1000})));
+    await importBookorbitStats(f.db,f.id,f.http);
+    expect(f.posts).toHaveLength(8);
+  });
   it('acknowledges stable IDs, retries safely, and leaves all legacy counters untouched',async()=>{
     const f=await fixture();
     expect(await (await f.submit()).json()).toMatchObject({accepted_session_ids:['session1']});

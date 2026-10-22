@@ -61,9 +61,9 @@ function useWide() {
   return wide
 }
 
-function Stats({ session, doc, aliases, activity: a, wide = false }) {
+function Stats({ session, doc, aliases, activity: a, wide = false, revision = 0 }) {
   // Merging or separating copies changes which stats count, so refetch then.
-  const [data] = useLoad(() => api.bookStats(session, doc), [session, doc, aliases?.join()], `bookstats:${doc}`)
+  const [data] = useLoad(() => api.bookStats(session, doc), [session, doc, aliases?.join(), revision], `bookstats:${doc}`)
   const c = data?.combined
   let cells
   if (c?.sessions) {
@@ -193,8 +193,8 @@ export function DeleteClip({ session, clip, document, onDone, onClose }) {
   )
 }
 
-function Clippings({ session, book }) {
-  const [items, error, reload] = useLoad(() => api.clippings(session, book.document), [session, book.document], `clips:${book.document}`)
+function Clippings({ session, book, revision = 0 }) {
+  const [items, error, reload] = useLoad(() => api.clippings(session, book.document), [session, book.document, revision], `clips:${book.document}`)
   const [sharing, setSharing] = useState(null)
   const [deleting, setDeleting] = useState(null)
   if (error) return <ErrorNote error={error} />
@@ -651,11 +651,29 @@ function Details({ book }) {
 // The book's description (from Hardcover), clamped with Read more when it's long.
 // Beyond this book: the next one in its series, and where this one syncs to
 // (its match at each linked service, fixable in place).
-function Services({ session, book }) {
+function Services({ session, book, onSync }) {
   const done = book.status === 'finished' || book.percentage >= 0.9
   const [series] = useLoad(() => (book.series && done ? api.next(session, book.document) : Promise.resolve(null)), [book.document, done], `next ${book.document}`)
   const [data, , reload] = useLoad(() => api.bookMatches(session, book.document), [book.document], `matches ${book.document}`)
   const [picking, setPicking] = useState(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncError, setSyncError] = useState(null)
+  const [syncResult, setSyncResult] = useState(null)
+  async function sync() {
+    setSyncing(true)
+    setSyncError(null)
+    setSyncResult(null)
+    try {
+      const result = await api.syncBookorbitBook(session, book.document)
+      setSyncResult(result.history_pending ? 'Progress and clippings updated. More history remains; sync again to continue.' :
+        result.queued ? 'Updated from BookOrbit. Outgoing updates queued.' : 'Updated from BookOrbit.')
+      onSync()
+    } catch (err) {
+      setSyncError(err.message || 'Couldn’t sync this book. Try again.')
+    } finally {
+      setSyncing(false)
+    }
+  }
   if (!series?.next && !data?.length) return null
   return (
     <Card className="mt-4 divide-y divide-stone-100">
@@ -682,6 +700,18 @@ function Services({ session, book }) {
                 </button>
               </div>
               {m.push_note && <p className="mt-1 text-xs text-amber-700">{m.push_note}</p>}
+              {m.id === 'bookorbit' && m.matched && (
+                <div className="mt-3">
+                  <button type="button" disabled={syncing} onClick={sync}
+                    className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-brand-600 ring-1 ring-brand-200 disabled:opacity-60">
+                    {syncing && <Loader2 aria-hidden="true" className="size-4 animate-spin" />}
+                    {syncing ? 'Syncing…' : 'Sync now'}
+                  </button>
+                  <p className="mt-2 text-xs text-stone-500">Pulls this book’s latest progress and clippings before sending updates.</p>
+                  {syncResult && <p role="status" className="mt-2 text-xs text-stone-600">{syncResult}</p>}
+                  {syncError && <p role="alert" className="mt-2 text-xs text-red-700">{syncError}</p>}
+                </div>
+              )}
               {picking === m.id && (
                 <Picker
                   session={session}
@@ -770,6 +800,8 @@ const seriesLabel = (b) =>
 
 export default function Book({ session, book, books, activity, back = { href: '#/', label: 'Library' }, onChange }) {
   const wide = useWide()
+  const [revision, setRevision] = useState(0)
+  const synced = () => { setRevision((n) => n + 1); onChange() }
   useNativeBack(back.href)
   if (!book) return <p className="py-16 text-center text-sm text-stone-500">Book not found.</p>
   return (
@@ -806,7 +838,7 @@ export default function Book({ session, book, books, activity, back = { href: '#
                 <span className="font-semibold text-brand-600">{pct(book.percentage)}</span> · {book.device || book.device_id} · {ago(book.timestamp)}
               </p>
               <ProgressBar value={book.percentage} className="mt-2" />
-              {wide && <Stats session={session} doc={book.document} aliases={book.aliases} activity={activity} wide />}
+              {wide && <Stats session={session} doc={book.document} aliases={book.aliases} activity={activity} wide revision={revision} />}
             </div>
             <div className="col-span-2 mt-6 md:col-span-1 md:col-start-2 md:self-end">
               <StatusPicker session={session} book={book} onChange={onChange} />
@@ -816,15 +848,15 @@ export default function Book({ session, book, books, activity, back = { href: '#
           {/* Cards flow two-up; spacing moves to the bottom so a column break can't eat a top margin. */}
           <div className="md:mt-4 md:columns-2 md:gap-4 md:[&>*]:mt-0 md:[&>*]:mb-4 [&>*]:break-inside-avoid">
             <Details book={book} />
-            {!wide && <Stats session={session} doc={book.document} aliases={book.aliases} activity={activity} />}
+            {!wide && <Stats session={session} doc={book.document} aliases={book.aliases} activity={activity} revision={revision} />}
             <SpotifyCard session={session} book={book} onChange={onChange} />
-            <Services session={session} book={book} />
+            <Services key={book.document} session={session} book={book} onSync={synced} />
           </div>
         </div>
 
         <section>
           <h2 className="mt-8 mb-3 font-display text-xl font-semibold text-stone-900 md:mt-6 md:text-2xl">Clippings</h2>
-          <Clippings session={session} book={book} />
+          <Clippings session={session} book={book} revision={revision} />
         </section>
       </div>
     </div>
