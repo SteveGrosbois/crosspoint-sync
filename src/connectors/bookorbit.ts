@@ -128,6 +128,18 @@ async function getJson(http: HttpTransport, c: OrbitCred, path: string): Promise
   }
 }
 
+/** Stats reads must distinguish an empty history from a failed request. */
+export async function bookorbitStatsJson(cred: Credential, http: HttpTransport, path: string): Promise<any> {
+  const c = parseCred(cred);
+  if (!c) throw new ConnectorOperationError('invalid BookOrbit credentials', false, true);
+  const res = await call(http, c, 'GET', path);
+  if (res.status < 200 || res.status >= 300) {
+    throw new ConnectorOperationError(`BookOrbit stats request failed (${res.status})`,
+      res.status === 429 || res.status >= 500, res.status === 401 || res.status === 403);
+  }
+  return res.json();
+}
+
 async function validate(cred: Credential, http: HttpTransport): Promise<ValidateResult> {
   const c = parseCred(cred);
   if (!c) return { ok: false, error: 'server URL, username and password are required' };

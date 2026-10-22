@@ -16,6 +16,7 @@ import { computeActivity, type DocInfo, type LogRow } from '../../models/activit
 import { documentInfo } from '../../models/cover.js';
 import { resolveDocument, statsAliases, statsDocuments } from '../../models/merge.js';
 import type { HttpTransport } from '../../connectors/types.js';
+import { bookorbitExclusions, readBookorbitStats } from '../../models/bookorbit-stats.js';
 
 const MAX_BOOK_BATCH = 20;
 const MAX_INFO_LOOKUPS = 25;
@@ -112,8 +113,8 @@ export function statsRoutes(db: DB, http?: HttpTransport): Hono<AppEnv> {
         'SELECT device_id, device, payload, updated_at FROM stats_device_global WHERE user_id = ?'
       )
       .all(user.id) as { device_id: string; device: string; payload: string; updated_at: number }[];
-    return c.json({
-      devices: rows.map((r) => ({
+    const imported = readBookorbitStats(db, user.id);
+    const devices = rows.map((r) => ({
         device_id: r.device_id,
         device: r.device,
         updated_at: r.updated_at,
@@ -122,7 +123,14 @@ export function statsRoutes(db: DB, http?: HttpTransport): Hono<AppEnv> {
           daily: db.prepare('SELECT date, seconds FROM stats_device_day WHERE user_id = ? AND device_id = ? ORDER BY date')
             .all(user.id, r.device_id),
         },
-      })),
+      }));
+    if (imported.global.sessions) devices.push({
+      device_id: 'connector:bookorbit', device: 'BookOrbit', updated_at: imported.updated_at,
+      stats: { ...imported.global, daily: imported.daily },
+    });
+    return c.json({
+      devices,
+      bookorbit: bookorbitExclusions(imported),
     });
   });
 
@@ -134,19 +142,24 @@ export function statsRoutes(db: DB, http?: HttpTransport): Hono<AppEnv> {
       )
       .all(user.id) as { device_id: string; device: string; payload: string; updated_at: number }[];
     const snapshots = rows.map((r) => JSON.parse(r.payload) as GlobalStatsSnapshot);
+    const imported = readBookorbitStats(db, user.id);
+    if (imported.global.sessions) snapshots.push(imported.global);
     const summary = combineGlobalStats(snapshots);
+    const daily = new Map<string, number>();
+    for (const d of [...db.prepare(
+      'SELECT date, SUM(seconds) AS seconds FROM stats_device_day WHERE user_id = ? GROUP BY date ORDER BY date'
+    ).all(user.id) as { date: string; seconds: number }[], ...imported.daily]) {
+      daily.set(d.date, (daily.get(d.date) ?? 0) + d.seconds);
+    }
     return c.json({
       ...summary,
-      daily: (db.prepare(
-        'SELECT date, SUM(seconds) AS seconds FROM stats_device_day WHERE user_id = ? GROUP BY date ORDER BY date'
-      ).all(user.id) as { date: string; seconds: number }[]).map((day) => ({
-        ...day, minutes: day.seconds / 60,
-      })),
-      devices: rows.map((r) => ({
+      daily: [...daily].sort(([a], [b]) => a.localeCompare(b)).map(([date, seconds]) => ({ date, seconds, minutes: seconds / 60 })),
+      bookorbit: bookorbitExclusions(imported),
+      devices: [...rows.map((r) => ({
         device_id: r.device_id,
         device: r.device,
         updated_at: r.updated_at,
-      })),
+      })), ...(imported.global.sessions ? [{ device_id: 'connector:bookorbit', device: 'BookOrbit', updated_at: imported.updated_at }] : [])],
     });
   });
 
@@ -171,15 +184,19 @@ export function statsRoutes(db: DB, http?: HttpTransport): Hono<AppEnv> {
       updated_at: number;
     }[];
     const snapshots = rows.map((r) => JSON.parse(r.payload) as BookStatsSnapshot);
+    const imported = readBookorbitStats(db, user.id, documents);
+    if (imported.book.sessions) snapshots.push(imported.book);
     return c.json({
       document,
       combined: combineBookStats(snapshots),
-      devices: rows.map((r) => ({
+      bookorbit: bookorbitExclusions(imported),
+      devices: [...rows.map((r) => ({
         device_id: r.device_id,
         document: r.document,
         updated_at: r.updated_at,
         stats: JSON.parse(r.payload),
-      })),
+      })), ...(imported.book.sessions ? [{ device_id: 'connector:bookorbit', document,
+        updated_at: imported.updated_at, stats: imported.book }] : [])],
     });
   });
 
@@ -226,7 +243,10 @@ export function statsRoutes(db: DB, http?: HttpTransport): Hono<AppEnv> {
       if (combined.completed && combined.finished_date > 0) finishedDates.set(document, combined.finished_date);
       if (combined.start_date > 0) startDates.set(document, combined.start_date);
     }
-    return c.json(computeActivity(rows, docs, tz, finishedDates, startDates));
+    const activity = computeActivity(rows, docs, tz, finishedDates, startDates);
+    const imported = readBookorbitStats(db, user.id);
+    activity.reading_days = [...new Set([...activity.reading_days, ...imported.daily.map((d) => d.date)])].sort();
+    return c.json(activity);
   });
 
   return app;

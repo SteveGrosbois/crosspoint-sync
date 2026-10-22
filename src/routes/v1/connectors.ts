@@ -32,6 +32,7 @@ import {
 } from '../../connectors/store.js';
 import { isValidDocument } from '../kosync.js';
 import { ConnectorOperationError, type HttpTransport } from '../../connectors/types.js';
+import { importBookorbitStats } from '../../connectors/bookorbit-stats.js';
 
 /** Where a provider sends the browser back: one https URL for web and native (an app link there). */
 export const oauthCallbackPath = (id: string) => `/connectors/${id}/callback`;
@@ -232,6 +233,7 @@ export function connectorRoutes(
     }
     const user = c.get('user');
     upsertAccount(db, user.id, conn.id, cred as Record<string, unknown>, result.accountLabel ?? null);
+    if (conn.id === 'bookorbit') void importBookorbitStats(db, user.id, transport);
     return c.json({ id: conn.id, linked: true, account: result.accountLabel ?? null });
   });
 
@@ -466,6 +468,11 @@ export function connectorRoutes(
       return c.json({ code: 2003, message: 'Connector not linked' }, 400);
     }
     const queued = backfillConnector(db, user.id, conn.id);
+    if (conn.id === 'bookorbit') {
+      // Keep an in-progress backfill, but make completed books eligible for reconciliation.
+      db.prepare('UPDATE bookorbit_stats_sync SET refreshed_at = 0 WHERE user_id = ?').run(user.id);
+      void importBookorbitStats(db, user.id, transport);
+    }
     return c.json({ queued });
   });
 

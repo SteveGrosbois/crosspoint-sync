@@ -433,6 +433,41 @@ Model (matches the firmware's nearby P2P stats sync): **each device uploads its 
 snapshots replace, never accumulate; the server aggregates across devices on read.** Never merge
 another device's stats into local ones.
 
+BookOrbit reading sessions are imported separately for matched books already known to Sync,
+including their complete historical session lists. Existing links are picked up automatically;
+linking or **Sync now** starts a background pass. The worker continues every minute, processes up
+to three books and five 100-session pages per book per pass, and refreshes completed imports hourly.
+It also tries matching up to three older/finished local books per pass. Books that exist only in
+BookOrbit are not added to the Sync library by this import.
+
+A book's new totals become visible only after all its pages have been validated. Session IDs
+deduplicate retries and duplicate book matches. Full reconciliation replaces edited/deleted
+sessions; failed requests retain the last complete import. Reading time, session counts, daily
+time, history, and time/day histograms join the existing stats responses as a virtual
+`connector:bookorbit` device named `BookOrbit`. Page counts and completed-book counts are not
+inferred from session durations. Calendar days use the BookOrbit account's timezone (UTC fallback),
+splitting sessions across local midnight; historical daily rows are retained beyond the bitmap's
+730-day window.
+
+**Overlap policy:** include every BookOrbit source, including KOReader on Kindle, Kobo,
+manual entries, and missing/unknown sources, alongside direct device stats. Having a device
+snapshot, the same reading date, or an equal duration is not evidence of a duplicate.
+Repeated BookOrbit session IDs count once. Rows with different IDs also count once when the
+external book ID, source, start timestamp, end timestamp, and duration all match exactly.
+Entries without a positive time span are matched only by session ID. Different books, different
+sources, and partial time overlaps remain separate. Original imported rows are retained.
+
+Direct device snapshots contain cumulative totals without session IDs, source provenance, or
+time intervals. They cannot prove overlap with a BookOrbit session, so no cross-source subtraction
+is guessed. If the same physical device's stats are independently uploaded directly and through
+BookOrbit, overlap between those channels still cannot be resolved automatically with this
+contract. Sync does not export reading stats to BookOrbit, so there is no stats export/import loop.
+The stats responses include `bookorbit: { excluded_sessions, excluded_seconds, reason }` for
+identifiable repeated records only; the app explains when such duplicates were counted once.
+Imported time is never converted into progress-log entries or extra page/sync counts.
+Unlinking removes imported stats; relinking clears the old import, and changing
+the BookOrbit server/user also clears stale matches, queued exports, and EPUB maps.
+
 #### PUT /api/v1/stats/global
 
 The device's `GlobalReadingStats` as JSON:

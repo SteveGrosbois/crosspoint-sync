@@ -901,6 +901,11 @@ export default function Stats({ session, tab = '', summary, activity, books, act
       {activity ? <PagesAndBooks activity={activity} books={books} /> : !activityError && <p className="py-6 text-sm text-stone-500">Loading…</p>}
       <WhatYouRead books={books} />
 
+      {summary?.bookorbit?.excluded_sessions > 0 && (
+        <p className="mt-4 text-sm text-stone-500">
+          Duplicate BookOrbit session records are counted once. Reading from your other devices is included.
+        </p>
+      )}
       {hasTime ? (
         <>
           <h2 className="mt-10 font-display text-xl font-semibold text-stone-900">Reading time</h2>
