@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 vi.hoisted(() => {
   window.matchMedia = vi.fn(() => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
 })
-vi.mock('./api.js', () => ({ isApp: false, api: { setStatus: vi.fn(), merge: vi.fn(), syncBookorbitBook: vi.fn() } }))
+vi.mock('./api.js', () => ({ isApp: false, api: { setStatus: vi.fn(), merge: vi.fn(), syncBook: vi.fn() } }))
 const loads = vi.hoisted(() => ({}))
 vi.mock('./ui.jsx', async (original) => ({ ...await original(), useLoad: (fn, deps, memo) => [loads[memo] ?? null] }))
 vi.mock('./tabbar.js', () => ({ useSheet() {}, useNativeBack() {}, useNativeButton() {} }))
@@ -17,14 +17,14 @@ const book = { document: 'book', title: 'Middlemarch', status: 'reading', percen
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
 it('syncs just this book, disables repeat clicks and refreshes its details', async () => {
-  loads['matches book'] = [{ id: 'bookorbit', name: 'BookOrbit', matched: true }]
+  loads['matches book'] = [{ id: 'bookorbit', name: 'BookOrbit', matched: true, sync: { read: true, write: true, enabled: true } }]
   let finish
-  api.syncBookorbitBook.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
+  api.syncBook.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
   const onChange = vi.fn()
   render(<Book session={{}} book={book} books={[book]} onChange={onChange} />)
   fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
   expect(screen.getByRole('button', { name: 'Syncing…' }).disabled).toBe(true)
-  expect(api.syncBookorbitBook).toHaveBeenCalledWith({}, 'book')
+  expect(api.syncBook).toHaveBeenCalledWith({}, 'bookorbit', 'book')
   finish({ queued: 1 })
   await waitFor(() => expect(onChange).toHaveBeenCalledOnce())
   expect(screen.getByRole('status').textContent).toContain('Outgoing updates queued')
@@ -32,8 +32,8 @@ it('syncs just this book, disables repeat clicks and refreshes its details', asy
 })
 
 it('shows a failed sync and allows retry without reporting success', async () => {
-  loads['matches book'] = [{ id: 'bookorbit', name: 'BookOrbit', matched: true }]
-  api.syncBookorbitBook.mockRejectedValue(new Error('BookOrbit unavailable'))
+  loads['matches book'] = [{ id: 'bookorbit', name: 'BookOrbit', matched: true, sync: { read: true, write: true, enabled: true } }]
+  api.syncBook.mockRejectedValue(new Error('BookOrbit unavailable'))
   const onChange = vi.fn()
   render(<Book session={{}} book={book} books={[book]} onChange={onChange} />)
   fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
@@ -79,4 +79,20 @@ it('offers hidden untitled syncs as merge candidates with device, progress and l
   fireEvent.click(screen.getByText('Untitled book'))
   await waitFor(() => expect(api.merge).toHaveBeenCalledWith({}, 'koreader-hash', 'book', true))
   delete loads['untitled books']
+})
+
+it.each([
+  ['kindle', 'Kindle', true, false, 'Updated from Kindle.'],
+  ['hardcover', 'Hardcover', false, true, 'Outgoing updates queued.'],
+  ['kosync', 'KOSync', false, true, 'Outgoing updates queued.'],
+])('syncs %s with direction-specific feedback', async (id, name, read, write, message) => {
+  loads['matches book'] = [{ id, name, matched: true, match_by: id === 'kosync' ? 'document' : 'metadata',
+    sync: { read, write, enabled: true } }]
+  api.syncBook.mockResolvedValue({ applied: read ? 1 : 0, queued: write ? 1 : 0 })
+  render(<Book session={{}} book={book} books={[book]} onChange={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Sync now' }))
+  expect((await screen.findByRole('status')).textContent).toBe(message)
+  expect(api.syncBook).toHaveBeenCalledWith({}, id, 'book')
+  if (id === 'kosync') expect(screen.queryByRole('button', { name: 'Change' })).toBeNull()
+  delete loads['matches book']
 })

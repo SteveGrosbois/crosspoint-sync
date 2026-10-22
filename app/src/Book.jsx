@@ -659,17 +659,18 @@ function Services({ session, book, onSync }) {
   const [syncing, setSyncing] = useState(false)
   const [syncError, setSyncError] = useState(null)
   const [syncResult, setSyncResult] = useState(null)
-  async function sync() {
-    setSyncing(true)
+  async function sync(m) {
+    setSyncing(m.id)
     setSyncError(null)
     setSyncResult(null)
     try {
-      const result = await api.syncBookorbitBook(session, book.document)
-      setSyncResult(result.history_pending ? 'Progress and clippings updated. More history remains; sync again to continue.' :
-        result.queued ? 'Updated from BookOrbit. Outgoing updates queued.' : 'Updated from BookOrbit.')
+      const result = await api.syncBook(session, m.id, book.document)
+      setSyncResult({ id: m.id, text: result.history_pending ? 'Progress and clippings updated. More history remains; sync again to continue.' :
+        result.queued ? (m.sync.read ? `Updated from ${m.name}. Outgoing updates queued.` : 'Outgoing updates queued.') :
+        m.sync.read ? `Updated from ${m.name}.` : 'No updates to send.' })
       onSync()
     } catch (err) {
-      setSyncError(err.message || 'Couldn’t sync this book. Try again.')
+      setSyncError({ id: m.id, text: err.message || 'Couldn’t sync this book. Try again.' })
     } finally {
       setSyncing(false)
     }
@@ -688,28 +689,28 @@ function Services({ session, book, onSync }) {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold text-stone-900">{m.name}</p>
                   <p className={`truncate text-xs ${m.matched ? 'text-stone-500' : m.source === 'manual' ? 'text-stone-500' : 'text-amber-700'}`}>
-                    {m.matched ? (m.source === 'manual' ? 'Matched by you' : 'Matched') : m.source === 'manual' ? 'Not syncing' : 'Not matched'}
+                    {m.matched ? (m.match_by === 'document' ? 'Linked by document' : m.source === 'manual' ? 'Matched by you' : 'Matched') : m.source === 'manual' ? 'Not syncing' : 'Not matched'}
                   </p>
                 </div>
-                <button
+                {m.match_by !== 'document' && <button
                   type="button"
                   onClick={() => setPicking(picking === m.id ? null : m.id)}
                   className="h-8 shrink-0 rounded-full px-3 text-sm font-semibold text-brand-600 ring-1 ring-brand-200 active:bg-brand-50"
                 >
                   {picking === m.id ? 'Cancel' : m.matched ? 'Change' : 'Match'}
-                </button>
+                </button>}
               </div>
               {m.push_note && <p className="mt-1 text-xs text-amber-700">{m.push_note}</p>}
-              {m.id === 'bookorbit' && m.matched && (
+              {m.matched && m.sync?.enabled && (m.sync.read || m.sync.write) && (
                 <div className="mt-3">
-                  <button type="button" disabled={syncing} onClick={sync}
+                  <button type="button" disabled={!!syncing} onClick={() => sync(m)}
                     className="inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold text-brand-600 ring-1 ring-brand-200 disabled:opacity-60">
-                    {syncing && <Loader2 aria-hidden="true" className="size-4 animate-spin" />}
-                    {syncing ? 'Syncing…' : 'Sync now'}
+                    {syncing === m.id && <Loader2 aria-hidden="true" className="size-4 animate-spin" />}
+                    {syncing === m.id ? 'Syncing…' : 'Sync now'}
                   </button>
-                  <p className="mt-2 text-xs text-stone-500">Pulls this book’s latest progress and clippings before sending updates.</p>
-                  {syncResult && <p role="status" className="mt-2 text-xs text-stone-600">{syncResult}</p>}
-                  {syncError && <p role="alert" className="mt-2 text-xs text-red-700">{syncError}</p>}
+                  <p className="mt-2 text-xs text-stone-500">{m.sync.read ? (m.sync.write ? 'Pulls this book’s latest data, then queues outgoing updates.' : 'Pulls this book’s latest updates.') : 'Queues this book’s updates for this service.'}</p>
+                  {syncResult?.id === m.id && <p role="status" className="mt-2 text-xs text-stone-600">{syncResult.text}</p>}
+                  {syncError?.id === m.id && <p role="alert" className="mt-2 text-xs text-red-700">{syncError.text}</p>}
                 </div>
               )}
               {picking === m.id && (
