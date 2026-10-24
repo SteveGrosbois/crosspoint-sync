@@ -236,3 +236,39 @@ it('does not create a folder for blank input or when cancelled or closed', async
   }
   expect(makeFolder).not.toHaveBeenCalled()
 })
+
+it.each(['Delete first.epub', 'Rename first.epub', 'New folder'])('locks reader controls while %s is open', async (action) => {
+  listFiles.mockResolvedValue([
+    { name: 'first.epub', isDirectory: false, size: 1024 },
+    { name: 'second.epub', isDirectory: false, size: 1024 },
+    { name: 'Books', isDirectory: true },
+  ])
+  render(<Send />)
+  const firstDelete = await screen.findByRole('button', { name: 'Delete first.epub' })
+  const trigger = screen.getByRole('button', { name: action })
+  trigger.focus()
+  fireEvent.click(trigger)
+  const dialog = screen.getByRole('dialog')
+  expect(dialog.contains(document.activeElement)).toBe(true)
+  const originalTitle = dialog.getAttribute('aria-label')
+  for (const name of ['Delete first.epub', 'Delete second.epub', 'Rename second.epub', 'New folder', 'SD card', 'Books']) {
+    const button = screen.getByRole('button', { name, exact: true })
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+  }
+  expect(screen.getAllByRole('dialog')).toHaveLength(1)
+  expect(dialog.getAttribute('aria-label')).toBe(originalTitle)
+  expect(deleteFiles).not.toHaveBeenCalled()
+  expect(renameFile).not.toHaveBeenCalled()
+  expect(makeFolder).not.toHaveBeenCalled()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+  expect(firstDelete.disabled).toBe(false)
+  expect(document.activeElement).toBe(trigger)
+
+  if (action === 'Delete first.epub') {
+    fireEvent.click(firstDelete)
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete', exact: true }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(deleteFiles).toHaveBeenCalledExactlyOnceWith('http://192.0.2.1', ['/first.epub'])
+  }
+})

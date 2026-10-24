@@ -286,13 +286,14 @@ function ReaderFiles({ base, onFoldersChanged }) {
     }
   }
   const crumbs = path.split('/').filter(Boolean)
+  const locked = busy || !!deleting || !!renaming || creatingIn !== null
 
   return (
     <section className="mt-8">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-display text-xl font-semibold text-stone-900">On your reader</h2>
         <button
-          disabled={busy}
+          disabled={locked}
           onClick={() => {
             setError(null)
             setCreatingIn(path)
@@ -303,13 +304,13 @@ function ReaderFiles({ base, onFoldersChanged }) {
         </button>
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1 text-sm">
-        <button onClick={() => setPath('/')} className="rounded-md px-1.5 py-0.5 font-medium text-brand-600 active:bg-stone-100">
+        <button disabled={locked} onClick={() => setPath('/')} className="rounded-md px-1.5 py-0.5 font-medium text-brand-600 active:bg-stone-100">
           SD card
         </button>
         {crumbs.map((c, i) => (
           <span key={i} className="flex items-center gap-1">
             <ChevronRight className="size-3.5 text-stone-300" />
-            <button onClick={() => setPath(`/${crumbs.slice(0, i + 1).join('/')}`)} className="rounded-md px-1.5 py-0.5 font-medium text-brand-600 active:bg-stone-100">
+            <button disabled={locked} onClick={() => setPath(`/${crumbs.slice(0, i + 1).join('/')}`)} className="rounded-md px-1.5 py-0.5 font-medium text-brand-600 active:bg-stone-100">
               {c}
             </button>
           </span>
@@ -329,7 +330,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
             return (
               <div key={f.name} className="flex items-center gap-3 px-4 py-2.5">
                 <button
-                  disabled={!f.isDirectory}
+                  disabled={locked || !f.isDirectory}
                   onClick={() => setPath(full)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
@@ -340,7 +341,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
                   </span>
                 </button>
                 <button
-                  disabled={busy}
+                  disabled={locked}
                   onClick={() => {
                     setError(null)
                     setRenameTo(f.name)
@@ -352,7 +353,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
                   <Pencil className="size-4" />
                 </button>
                 <button
-                  disabled={busy}
+                  disabled={locked}
                   onClick={() => {
                     setError(null)
                     setDeleting({ ...f, path: full })
