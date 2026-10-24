@@ -94,6 +94,7 @@ Validates credentials. `200 {"authorized": "OK"}` or `401`.
     "filename": "Foundryside - Robert Jackson Bennett.epub",
     "title": "Foundryside",
     "authors": "Robert Jackson Bennett",
+    "language": "en",
     "bookfusion_id": "36835"
   }
   ```
@@ -101,6 +102,10 @@ Validates credentials. `200 {"authorized": "OK"}` or `401`.
   All fields optional strings (≤512 chars). `filename`/`title`/`authors` are stored per
   `(user, document)`; fields the client omits never overwrite previously stored values. Retrieve
   via `GET /api/v1/documents` or joined into `GET /api/v1/progress`.
+
+  **Language.** `language` is the EPUB's `dc:language` as a BCP 47 tag (`"ja"`, `"de-DE"`). It
+  only fills a blank, so a language set by hand through `PUT /api/v1/documents/{document}/info`
+  stays. A value that isn't a language tag is ignored; the sync itself still succeeds.
 
   **Service ids.** Any extra `<service>_id` field (from a CrossPoint plugin's book sidecar,
   e.g. `bookfusion_id`) pre-seeds an exact match for the connector of that name: progress is
@@ -625,7 +630,9 @@ the server has `GOOGLE_BOOKS_API_KEY`, then Amazon's "Print length" via SearchAP
 
 Manual fixes when the lookup got it wrong: `{"cover_url": "https://...", "page_count": 433}` (either
 field optional). Manual values stick, since lookups only fill blanks; `null` clears a field so it's
-looked up again. Returns the stored `{document, cover_url, page_count}`.
+looked up again. `language` (a BCP 47 tag) can be set the same way and then stays over device
+syncs; `null` clears it so the next device sync fills it again. Returns the stored
+`{document, cover_url, page_count, title, author, language}`.
 
 #### GET /api/v1/documents/{document}/cover/candidates?q=
 
