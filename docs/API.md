@@ -575,6 +575,25 @@ Server-side aggregate across all of the user's devices:
 }
 ```
 
+#### GET /api/v1/stats/overview?tz=&days=
+
+A small digest for readers that want to show the account's totals on the device. It has the same numbers
+the Stats page shows, from every source: syncs, chosen start and finish dates, and device stats.
+
+```json
+{"anchor_day": 9793, "days": 365, "history_b64": "...", "reading_days": 53,
+ "current_streak": 2, "longest_streak": 6, "books_finished": 496, "finished_this_year": 31,
+ "pages_read": 142177, "seconds": 2880, "sessions": 0, "today_seconds": 420, "week_seconds": 2880}
+```
+
+- `tz` is the caller's UTC offset in minutes as JS `getTimezoneOffset()` gives it. It decides what "today" and "this year" are.
+- `anchor_day` is today, as days since 2000-01-01. In `history_b64`, bit N (LSB-first per byte) is set when day
+  `anchor_day - N` was a reading day. The bitmap covers the last `days` days (default 365, at most 3650), so
+  the response stays a few hundred bytes.
+- All the counts cover the whole history, whatever `days` is: `reading_days`, the streaks, the finished counts and the pages.
+  The time fields come from device stats: `seconds`, `sessions`, `today_seconds`, and `week_seconds` for the
+  last 7 days including today.
+
 #### GET /api/v1/stats/global
 
 Raw per-device snapshots (`{"devices": [{"device_id", "device", "updated_at", "stats": {...}}]}`)
