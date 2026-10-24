@@ -2,7 +2,6 @@ mod books;
 mod epub_name;
 mod mdns;
 mod opds;
-mod optimizer;
 mod refresh;
 mod widget;
 
@@ -35,11 +34,13 @@ pub fn run() {
       books::download_book,
       books::list_downloads,
       books::delete_download,
+      books::read_download,
       books::send_download,
       books::send_bytes,
       books::save_file,
       widget::update_widget,
       set_appearance,
+      supports_native_chrome,
       set_page_scroll,
       refresh::end_refresh,
     ])
@@ -47,8 +48,24 @@ pub fn run() {
     .expect("error while running tauri application");
 }
 
+// Read the real OS version; WebKit's user agent can report a compatibility version.
+#[tauri::command]
+fn supports_native_chrome() -> bool {
+  #[cfg(target_os = "ios")]
+  {
+    use objc2_foundation::{NSOperatingSystemVersion, NSProcessInfo};
+    NSProcessInfo::processInfo().isOperatingSystemAtLeastVersion(NSOperatingSystemVersion {
+      majorVersion: 26,
+      minorVersion: 0,
+      patchVersion: 0,
+    })
+  }
+  #[cfg(not(target_os = "ios"))]
+  false
+}
+
 // iOS scroll view: wry turns off bounce, but native apps rubber-band (even on pages too
-// short to scroll).
+// short to scroll). Also the edge swipe back (and forward) through the app's history.
 #[cfg(target_os = "ios")]
 fn native_scroll(app: &tauri::App) -> tauri::Result<()> {
   use tauri::Manager;
@@ -59,6 +76,7 @@ fn native_scroll(app: &tauri::App) -> tauri::Result<()> {
     let scroll: *mut AnyObject = msg_send![view, scrollView];
     let _: () = msg_send![scroll, setBounces: true];
     let _: () = msg_send![scroll, setAlwaysBounceVertical: true];
+    let _: () = msg_send![view, setAllowsBackForwardNavigationGestures: true];
   })
 }
 

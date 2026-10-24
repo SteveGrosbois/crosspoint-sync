@@ -5,7 +5,9 @@ import { isApp } from './api.js'
 import { loadDevicePrefs } from './device.js'
 import { download, feed as fetchFeed, image, loadCatalogs, moveCatalog, navRows, needsAuthedImage, readable, saveCatalogs, search, sendDownload } from './catalogs.js'
 import { progressLabel } from './Send.jsx'
-import { Card, EmptyAction, EmptyState, Eyebrow, Spinner, folderLabel, notify } from './ui.jsx'
+import ConversionLog from './ConversionLog.jsx'
+import { transferProgress } from './epub/log.js'
+import { Card, EmptyAction, EmptyState, Eyebrow, Sheet, Spinner, folderLabel, notify } from './ui.jsx'
 import { useNativeBack } from './tabbar.js'
 
 // Hash routes:
@@ -137,9 +139,11 @@ function Tile({ cat, entry, onOpen }) {
   )
 }
 
+const gridClass = 'grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:gap-x-5 lg:grid-cols-5 xl:grid-cols-6'
+
 function Grid({ cat, entries, onOpen }) {
   return (
-    <div className="grid grid-cols-3 gap-x-3 gap-y-5 sm:grid-cols-4 md:gap-x-5 lg:grid-cols-5 xl:grid-cols-6">
+    <div className={gridClass}>
       {entries.map((e, i) => (
         <Tile key={`${e.id}-${i}`} cat={cat} entry={e} onOpen={onOpen} />
       ))}
@@ -257,19 +261,19 @@ function BookPage({ cat, entryKey }) {
   const formats = readable(entry)
   const chosen = formats.find((f) => f.href === format?.href) ?? formats[0]
   async function run(alsoSend) {
-    setJob({ state: 'working', progress: null })
+    setJob({ state: 'working', progress: null, logs: [] })
     try {
       const book = await download(cat, entry, chosen, (progress) => setJob((j) => ({ ...j, progress })))
       const prefs = loadDevicePrefs()
-      const used = alsoSend ? await sendDownload(book.name, prefs, (progress) => setJob((j) => ({ ...j, progress }))) : null
-      setJob({ state: 'done', sent: alsoSend })
+      const used = alsoSend ? await sendDownload(book.name, prefs, (event) => setJob((j) => transferProgress(j, event))) : null
+      setJob((j) => ({ ...j, state: 'done', sent: alsoSend }))
       notify(
         alsoSend
           ? { title: 'Sent to your reader', detail: `${used} in ${folderLabel(prefs.folder)}` }
           : { title: 'Downloaded', detail: `${entry.title} is on your shelf in Send` }
       )
     } catch (e) {
-      setJob({ state: 'error', error: String(e) })
+      setJob((j) => ({ ...j, state: 'error', error: String(e) }))
       notify({ error: true, title: alsoSend ? "Couldn't send that book" : "Couldn't download that book", detail: String(e) })
     }
   }
@@ -331,17 +335,22 @@ function BookPage({ cat, entryKey }) {
                   <Download className="size-5" /> Download
                 </button>
               </div>
-              {job && (
-                <p className={`mt-3 text-center text-sm ${job.state === 'error' ? 'text-red-600' : 'text-stone-600'}`}>
-                  {job.state === 'working'
-                    ? progressLabel(job.progress)
-                    : job.state === 'done'
-                      ? job.sent
-                        ? 'On your reader.'
-                        : 'Downloaded. Send it any time from the Send tab.'
-                      : job.error}
-                </p>
-              )}
+              <ConversionLog entries={job?.logs}>
+                {(details) => job && (
+                  <p className={`mt-3 flex items-center justify-center text-sm ${job.state === 'error' ? 'text-red-600' : 'text-stone-600'}`}>
+                    <span>
+                      {job.state === 'working'
+                        ? progressLabel(job.progress)
+                        : job.state === 'done'
+                          ? job.sent
+                            ? 'On your reader.'
+                            : 'Downloaded. Send it any time from the Send tab.'
+                          : job.error}
+                    </span>
+                    {details}
+                  </p>
+                )}
+              </ConversionLog>
             </div>
           )}
 
@@ -523,7 +532,7 @@ function Storefront({ catalogs }) {
   )
 }
 
-// Search every catalog at once: a rail of results per catalog.
+// Search every catalog at once, keeping the source attached to each result.
 function SearchAll({ catalogs, query }) {
   const [results, setResults] = useState({})
   useEffect(() => {
@@ -531,7 +540,7 @@ function SearchAll({ catalogs, query }) {
     setResults({})
     for (const c of catalogs) {
       search(c, query).then(
-        (f) => live && setResults((r) => ({ ...r, [c.id]: { entries: f.groups.length ? f.groups.flatMap((g) => g.entries) : f.entries } })),
+        (f) => live && setResults((r) => ({ ...r, [c.id]: { entries: f.groups.length ? f.groups.flatMap((g) => g.entries) : f.entries, next: f.next } })),
         (e) => live && setResults((r) => ({ ...r, [c.id]: { error: String(e) } }))
       )
     }
@@ -539,22 +548,39 @@ function SearchAll({ catalogs, query }) {
       live = false
     }
   }, [catalogs, query])
+  const entries = catalogs.flatMap((cat) => (results[cat.id]?.entries ?? []).map((entry) => ({ cat, entry })))
+  const loading = catalogs.some((cat) => !results[cat.id])
+  const errors = catalogs.filter((cat) => results[cat.id]?.error)
   return (
     <div className="px-4 pt-6 pb-4 md:px-8 md:pt-6 lg:px-12">
       <BackBar back="#/browse" label="Browse" />
       <SearchBox value={query} placeholder="Search all catalogs" onSubmit={searchAll} />
-      {catalogs.map((c) => {
-        const r = results[c.id]
-        if (!r) return <SkeletonRail key={c.id} title={c.name} />
-        if (r.error || !r.entries.length)
-          return (
-            <section key={c.id} className="mt-7">
-              <h3 className="font-display text-xl font-semibold text-stone-900">{c.name}</h3>
-              <p className="mt-1 text-sm text-stone-500">{r.error ?? 'No matches.'}</p>
-            </section>
-          )
-        return <CoverRail key={c.id} cat={c} title={c.name} more={href(c, 's', query)} entries={r.entries} onOpen={openBook(c)} />
-      })}
+      {loading && <p role="status" className="mt-6 text-sm text-stone-500">Searching catalogs…</p>}
+      {errors.map((cat) => (
+        <p key={cat.id} role="alert" className="mt-3 text-sm text-red-600">{cat.name}: {results[cat.id].error}</p>
+      ))}
+      {entries.length > 0 && (
+        <ul aria-label="Search results" className={`mt-6 ${gridClass}`}>
+          {entries.map(({ cat, entry }, i) => (
+            <li key={`${cat.id}-${entry.id}-${i}`} className="min-w-0">
+              <Tile cat={cat} entry={entry} onOpen={openBook(cat)} />
+              <p className="mt-1 truncate text-xs text-stone-500">{cat.name}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!loading && !entries.length && !errors.length && (
+        <EmptyState compact icon={Search} title="No matches">
+          Try another title or author.
+        </EmptyState>
+      )}
+      <div className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
+        {catalogs.filter((cat) => results[cat.id]?.next).map((cat) => (
+          <a key={cat.id} href={href(cat, 's', query)} className="flex min-h-11 items-center text-sm font-semibold text-brand-600">
+            More results from {cat.name}
+          </a>
+        ))}
+      </div>
     </div>
   )
 }
@@ -590,7 +616,7 @@ function FeedView({ cat, url, query }) {
   const { feed, error } = state
   const rows = feed ? navRows(feed.navigation) : []
   // Grouped feeds (OPDS 2 lanes) also flatten their books into entries; show the lanes instead.
-  const loose = feed?.groups.length ? [] : (feed?.entries ?? [])
+  const loose = feed?.groups.length && !query ? [] : (feed?.entries ?? [])
   const open = openBook(cat)
 
   return (
@@ -635,7 +661,7 @@ function FeedView({ cat, url, query }) {
             </Card>
           )}
 
-          {feed.groups.map((g, gi) => (
+          {!query && feed.groups.map((g, gi) => (
             <CoverRail key={`${g.title}-${gi}`} cat={cat} title={g.title} more={g.href && href(cat, 'f', g.href)} entries={g.entries} onOpen={open} />
           ))}
 
@@ -731,6 +757,7 @@ const haptic = (fn) => isApp && fn().catch(() => {})
 
 function Manage({ catalogs, setCatalogs }) {
   const [editing, setEditing] = useState(catalogs.length ? null : 'new') // catalog | 'new' | null
+  const [removing, setRemoving] = useState(null)
   const save = (cat) => {
     setCatalogs(catalogs.some((c) => c.id === cat.id) ? catalogs.map((c) => (c.id === cat.id ? cat : c)) : [...catalogs, cat])
     setEditing(null)
@@ -853,7 +880,7 @@ function Manage({ catalogs, setCatalogs }) {
                 <Pencil className="size-4" />
               </button>
               <button
-                onClick={() => confirm(`Remove ${c.name}?`) && setCatalogs(catalogs.filter((x) => x.id !== c.id))}
+                onClick={() => setRemoving(c)}
                 className="grid size-10 place-items-center rounded-full text-stone-400 active:bg-stone-100"
                 aria-label={`Remove ${c.name}`}
               >
@@ -876,6 +903,25 @@ function Manage({ catalogs, setCatalogs }) {
         >
           <Plus className="size-5" /> Add catalog
         </button>
+      )}
+      {removing && (
+        <Sheet title={`Remove ${removing.name}?`} onClose={() => setRemoving(null)}>
+          <p className="mt-3 text-sm/6 text-stone-600">You can add this catalog again later. Downloaded books are kept.</p>
+          <div className="mt-5 grid gap-2">
+            <button
+              onClick={() => {
+                setCatalogs(catalogs.filter((c) => c.id !== removing.id))
+                setRemoving(null)
+              }}
+              className="h-12 rounded-xl bg-red-600 text-base font-semibold text-white active:bg-red-700"
+            >
+              Remove
+            </button>
+            <button onClick={() => setRemoving(null)} className="h-12 rounded-xl bg-surface text-base font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100">
+              Cancel
+            </button>
+          </div>
+        </Sheet>
       )}
     </div>
   )

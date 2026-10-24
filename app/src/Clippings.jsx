@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Copy, FileDown, Quote, Search, Share2 } from 'lucide-react'
+import { Copy, FileDown, Quote, Search } from 'lucide-react'
 import { api, isApp } from './api.js'
 import { saveFile } from './shareCard.js'
 import { ClipMenu, ClipShare, DeleteClip, hold } from './Book.jsx'
-import { Cover, EmptyState, ErrorNote, Spinner, useLoad } from './ui.jsx'
+import { Cover, EmptyState, ErrorNote, ShareIcon, Spinner, useLoad } from './ui.jsx'
 
 const date = (unix) => new Date(unix * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 
@@ -27,7 +27,7 @@ function markdown(groups) {
 
 function Clip({ session, clip, book, onShare, onDelete, showBook }) {
   return (
-    <article className={`group relative select-none [-webkit-touch-callout:none] md:select-text ${showBook
+    <article className={`group relative select-none [-webkit-touch-callout:none] ${showBook
       ? 'border-b border-stone-200 pt-6 pb-4 pr-8'
       : 'border-b border-stone-200 py-5 pr-8'}`} {...hold(() => onDelete(clip))}>
       <ClipMenu onDelete={() => onDelete(clip)} />
@@ -44,7 +44,7 @@ function Clip({ session, clip, book, onShare, onDelete, showBook }) {
       )}
       <div className="mt-2 flex items-center justify-between gap-3">
         <button onClick={() => onShare(clip)} className="-ml-2 flex h-11 items-center gap-1.5 rounded-full px-2 text-sm font-medium text-brand-600 active:bg-stone-100">
-          <Share2 className="size-4" /> Share
+          <ShareIcon className="size-4" /> Share
         </button>
         <p className="truncate text-xs text-stone-500">{[clip.chapter, date(clip.created_at)].filter(Boolean).join(' · ')}</p>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Copy, Download, Share2, X } from 'lucide-react'
+import { Copy, Download, X } from 'lucide-react'
 import { PLATFORMS, canShareNatively, copyImage, postTo, saveImage, shareNatively } from './shareCard.js'
-import { Spinner } from './ui.jsx'
+import { ShareIcon, Spinner } from './ui.jsx'
 import { useSheet } from './tabbar.js'
 
 // Preview a generated share card, then share it natively, copy/save it, or post it
@@ -59,7 +59,7 @@ export default function ShareSheet({ heading, meta, render, renderKey, onClose, 
             onClick={() => act(() => shareNatively(card.blob, meta).then(() => null), () => null)}
             className="mt-5 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-500 text-base font-semibold text-white shadow-sm active:scale-[0.98] disabled:opacity-60"
           >
-            <Share2 className="size-5" /> Share
+            <ShareIcon className="size-5" /> Share
           </button>
         )}
 
