@@ -33,7 +33,7 @@ export function progressRoutes(db: DB, refreshProgress: ProgressRefresh = async 
       return kosyncError(c, 403, 2003, 'Invalid request');
     }
     const user = c.get('user');
-    const parsed = parseProgressBody(user.id, body);
+    const parsed = parseProgressBody(user.id, body, { clientTime: true });
     if (!parsed.ok) {
       return kosyncError(c, 403, parsed.code, parsed.message);
     }
