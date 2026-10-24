@@ -251,7 +251,9 @@ function Clippings({ session, book, revision = 0 }) {
   )
 }
 
-const norm = (s) => (s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+// Letters, marks and digits of every script: an ASCII-only pattern reduces Japanese titles to their
+// digits, and dropping marks merges Thai or Hindi words that differ only in a tone or vowel sign.
+const norm = (s) => (s ?? '').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, ' ').trim()
 // Same normalized title (and author when both have one): probably the same book synced twice.
 export const looksLikeSame = (a, b) =>
   a.document !== b.document && norm(a.title) && norm(a.title) === norm(b.title) && (!a.author || !b.author || norm(a.author) === norm(b.author))
