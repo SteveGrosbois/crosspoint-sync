@@ -43,6 +43,8 @@ export interface DocumentMetadata {
   filename: string | null;
   title: string | null;
   authors: string | null;
+  /** BCP 47 tag from the EPUB (`dc:language`), e.g. "ja"; null when absent or malformed. */
+  language: string | null;
   /**
    * Service book ids from the CrossPoint plugin sidecar ("<book>.meta.json"),
    * keyed by service name. A plugin that downloads a book records e.g.
@@ -55,7 +57,13 @@ export interface DocumentMetadata {
 
 // Sidecar convention: a flat `<service>_id` field names the connector
 // ("bookfusion_id" -> connector "bookfusion"). Reserved keys are not ids.
-const RESERVED_META_KEYS = new Set(['filename', 'title', 'authors', 'source']);
+const RESERVED_META_KEYS = new Set(['filename', 'title', 'authors', 'language', 'source']);
+
+/** A BCP 47 language tag ("en", "ja", "de-DE", "zh-Hant"), trimmed; null if it doesn't look like one. */
+export function languageTag(v: unknown): string | null {
+  const tag = typeof v === 'string' ? v.trim() : '';
+  return /^[a-z]{2,3}(-[a-z0-9]{2,8}){0,3}$/i.test(tag) ? tag : null;
+}
 
 function parseMetadata(raw: unknown): DocumentMetadata | null {
   if (typeof raw !== 'object' || raw === null) return null;
@@ -72,10 +80,11 @@ function parseMetadata(raw: unknown): DocumentMetadata | null {
     filename: str(o.filename),
     title: str(o.title),
     authors: str(o.authors),
+    language: languageTag(o.language),
     externalIds,
   };
   const hasId = Object.keys(externalIds).length > 0;
-  return meta.filename || meta.title || meta.authors || hasId ? meta : null;
+  return meta.filename || meta.title || meta.authors || meta.language || hasId ? meta : null;
 }
 
 /** Stores progress-PUT metadata without clobbering fields the client didn't send. */
@@ -87,14 +96,16 @@ export function upsertDocumentMetadata(
   updatedAt: number
 ): void {
   db.prepare(
-    `INSERT INTO documents (user_id, document, title, author, filename, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?)
+    `INSERT INTO documents (user_id, document, title, author, filename, language, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, document) DO UPDATE SET
        title = CASE WHEN documents.meta_manual THEN documents.title ELSE COALESCE(excluded.title, documents.title) END,
        author = CASE WHEN documents.meta_manual THEN documents.author ELSE COALESCE(excluded.author, documents.author) END,
        filename = COALESCE(excluded.filename, documents.filename),
+       -- Only fills a blank: an EPUB's language doesn't change, and one set by hand stays.
+       language = COALESCE(documents.language, excluded.language),
        updated_at = excluded.updated_at`
-  ).run(userId, document, meta.title, meta.authors, meta.filename, updatedAt);
+  ).run(userId, document, meta.title, meta.authors, meta.filename, meta.language, updatedAt);
 }
 
 /**
