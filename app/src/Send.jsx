@@ -22,7 +22,7 @@ import {
 import { isApp } from './api.js'
 import { DEFAULT_HOST, EXTENSIONS, connect, deleteFiles, folders, isBook, joinPath, listFiles, loadDevicePrefs, makeFolder, renameFile, saveDevicePrefs } from './device.js'
 import { downloads as listDownloads, removeDownload, sendDownload, sendFile } from './catalogs.js'
-import { Card, EmptyState, folderLabel, notify, Toggle } from './ui.jsx'
+import { Card, EmptyState, folderLabel, notify, Sheet, Toggle } from './ui.jsx'
 
 const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
 // Android's picker filters by MIME type and has none for .md, so let it show everything there.
@@ -253,6 +253,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(0)
+  const [deleting, setDeleting] = useState(null)
   useEffect(() => {
     let live = true
     setFiles(null)
@@ -273,8 +274,10 @@ function ReaderFiles({ base, onFoldersChanged }) {
       await fn()
       setTick((t) => t + 1)
       if (foldersChanged) onFoldersChanged()
+      return true
     } catch (e) {
-      setError(e.message)
+      setError(e.message || String(e))
+      return false
     } finally {
       setBusy(false)
     }
@@ -346,10 +349,10 @@ function ReaderFiles({ base, onFoldersChanged }) {
                 </button>
                 <button
                   disabled={busy}
-                  onClick={() =>
-                    confirm(`Delete "${f.name}"${f.isDirectory ? ' and everything in it' : ''} from your reader?`) &&
-                    run(() => deleteFiles(base, [full]), f.isDirectory)
-                  }
+                  onClick={() => {
+                    setError(null)
+                    setDeleting({ ...f, path: full })
+                  }}
                   className="-mr-2 grid size-9 place-items-center rounded-full text-stone-400 active:bg-stone-100"
                   aria-label={`Delete ${f.name}`}
                 >
@@ -360,6 +363,29 @@ function ReaderFiles({ base, onFoldersChanged }) {
           })
         )}
       </Card>
+      {deleting && (
+        <Sheet title={`Delete ${deleting.name}?`} onClose={() => { if (!busy) setDeleting(null) }}>
+          <p className="mt-3 text-sm/6 text-stone-600">
+            {deleting.isDirectory ? 'Delete this folder from your reader? The folder must be empty.' : 'Delete this file from your reader?'}
+          </p>
+          {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
+          <div className="mt-5 grid gap-2">
+            <button
+              disabled={busy}
+              onClick={async () => {
+                const removed = await run(() => deleteFiles(base, [deleting.path]), deleting.isDirectory)
+                if (removed) setDeleting(null)
+              }}
+              className="h-12 rounded-xl bg-red-600 text-base font-semibold text-white active:bg-red-700 disabled:opacity-60"
+            >
+              {busy ? 'Deleting…' : 'Delete'}
+            </button>
+            <button disabled={busy} onClick={() => setDeleting(null)} className="h-12 rounded-xl bg-surface text-base font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100 disabled:opacity-60">
+              Cancel
+            </button>
+          </div>
+        </Sheet>
+      )}
     </section>
   )
 }
