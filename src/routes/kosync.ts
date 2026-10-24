@@ -291,7 +291,8 @@ export function upsertProgress(db: DB, p: ProgressUpsert): void {
  */
 export function parseProgressBody(
   userId: number,
-  body: unknown
+  body: unknown,
+  opts: { clientTime?: boolean } = {}
 ): { ok: true; record: ProgressUpsert } | { ok: false; code: number; message: string } {
   if (typeof body !== 'object' || body === null) {
     return { ok: false, code: 2003, message: 'Invalid request' };
@@ -328,9 +329,23 @@ export function parseProgressBody(
       progress: o.progress,
       position,
       metadata: parseMetadata(o.metadata),
-      updatedAt: nowSeconds(),
+      updatedAt: opts.clientTime ? clientTime(o.timestamp) : nowSeconds(),
     },
   };
+}
+
+// Oldest client time taken as real; anything earlier is an unset clock.
+const EARLIEST_CLIENT_TIME = 946684800; // 2000-01-01
+
+/**
+ * When the position was read, for clients that sync later than they read (an
+ * importer running hourly, say). Whole unix seconds; a time in the future is
+ * capped at now, and a missing or implausible one falls back to now.
+ */
+function clientTime(value: unknown): number {
+  const now = nowSeconds();
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < EARLIEST_CLIENT_TIME) return now;
+  return Math.min(value, now);
 }
 
 /**

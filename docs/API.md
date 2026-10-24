@@ -222,6 +222,12 @@ The kosync body plus a `position` object mapping 1:1 to the firmware's `CompactP
 
 Response: `{"document": "...", "timestamp": 1752345678}`.
 
+An optional `timestamp` (unix seconds) says when the position was read, for clients that sync
+later than they read. The stored time, the reading timeline and "newest wins" then use it instead
+of the time of the request. A time in the future is capped at now; a missing one, or one before
+2000, means now. `PUT /syncs/progress` and the batch route always use the time of the request, so
+a reader with an unset clock can't backdate itself.
+
 An invalid `position` is ignored (the kosync fields still sync); a missing `position` on a later
 PUT keeps the previously stored one for that device.
 
