@@ -254,6 +254,8 @@ function ReaderFiles({ base, onFoldersChanged }) {
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(0)
   const [deleting, setDeleting] = useState(null)
+  const [renaming, setRenaming] = useState(null)
+  const [renameTo, setRenameTo] = useState('')
   useEffect(() => {
     let live = true
     setFiles(null)
@@ -339,8 +341,9 @@ function ReaderFiles({ base, onFoldersChanged }) {
                 <button
                   disabled={busy}
                   onClick={() => {
-                    const name = prompt(`Rename "${f.name}" to`, f.name)?.trim()
-                    if (name && name !== f.name) run(() => renameFile(base, full, name), f.isDirectory)
+                    setError(null)
+                    setRenameTo(f.name)
+                    setRenaming({ ...f, path: full })
                   }}
                   className="grid size-9 place-items-center rounded-full text-stone-400 active:bg-stone-100"
                   aria-label={`Rename ${f.name}`}
@@ -363,6 +366,40 @@ function ReaderFiles({ base, onFoldersChanged }) {
           })
         )}
       </Card>
+      {renaming && (
+        <Sheet title={`Rename ${renaming.name}`} onClose={() => { if (!busy) setRenaming(null) }}>
+          <form onSubmit={async (e) => {
+            e.preventDefault()
+            const name = renameTo.trim()
+            if (busy || !name || name === renaming.name) return
+            const renamed = await run(() => renameFile(base, renaming.path, name), renaming.isDirectory)
+            if (renamed) setRenaming(null)
+          }}>
+            <label className="mt-3 block text-sm font-medium text-stone-600">
+              New name
+              <input
+                autoFocus
+                value={renameTo}
+                onChange={(e) => setRenameTo(e.target.value)}
+                disabled={busy}
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className="mt-2 h-12 w-full rounded-xl bg-surface px-3 text-base text-stone-900 ring-1 ring-stone-950/10 outline-none focus:ring-2 focus:ring-brand-500/60 disabled:opacity-60"
+              />
+            </label>
+            {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
+            <div className="mt-5 grid gap-2">
+              <button type="submit" disabled={busy || !renameTo.trim() || renameTo.trim() === renaming.name} className="h-12 rounded-xl bg-brand-500 text-base font-semibold text-white active:bg-brand-600 disabled:opacity-60">
+                {busy ? 'Renaming…' : 'Rename'}
+              </button>
+              <button type="button" disabled={busy} onClick={() => setRenaming(null)} className="h-12 rounded-xl bg-surface text-base font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100 disabled:opacity-60">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </Sheet>
+      )}
       {deleting && (
         <Sheet title={`Delete ${deleting.name}?`} onClose={() => { if (!busy) setDeleting(null) }}>
           <p className="mt-3 text-sm/6 text-stone-600">
