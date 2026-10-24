@@ -22,7 +22,7 @@ import {
 import { isApp } from './api.js'
 import { DEFAULT_HOST, EXTENSIONS, connect, deleteFiles, folders, isBook, joinPath, listFiles, loadDevicePrefs, makeFolder, renameFile, saveDevicePrefs } from './device.js'
 import { downloads as listDownloads, removeDownload, sendDownload, sendFile } from './catalogs.js'
-import { ActionSheet, Card, EmptyState, folderLabel, notify, Sheet, Toggle } from './ui.jsx'
+import { ActionSheet, Card, EmptyState, folderLabel, notify, Toggle } from './ui.jsx'
 import ConversionLog from './ConversionLog.jsx'
 import { transferProgress } from './epub/log.js'
 
@@ -261,20 +261,19 @@ function Shelf({ prefs, ready }) {
 function ReaderFiles({ base, onFoldersChanged }) {
   const [path, setPath] = useState('/')
   const [files, setFiles] = useState(null)
-  const [error, setError] = useState(null)
+  const [listError, setListError] = useState(null)
   const [busy, setBusy] = useState(false)
   const [tick, setTick] = useState(0)
   const [deleting, setDeleting] = useState(null)
   const [renaming, setRenaming] = useState(null)
-  const [renameTo, setRenameTo] = useState('')
   const [creatingIn, setCreatingIn] = useState(null)
   useEffect(() => {
     let live = true
     setFiles(null)
-    setError(null)
+    setListError(null)
     listFiles(base, path).then(
       (f) => live && setFiles(f),
-      (e) => live && setError(e.message)
+      (e) => live && setListError(e.message)
     )
     return () => {
       live = false
@@ -283,15 +282,10 @@ function ReaderFiles({ base, onFoldersChanged }) {
 
   async function run(fn, foldersChanged) {
     setBusy(true)
-    setError(null)
     try {
       await fn()
       setTick((t) => t + 1)
       if (foldersChanged) onFoldersChanged()
-      return true
-    } catch (e) {
-      setError(e.message || String(e))
-      return false
     } finally {
       setBusy(false)
     }
@@ -305,10 +299,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
         <h2 className="font-display text-xl font-semibold text-stone-900">On your reader</h2>
         <button
           disabled={locked}
-          onClick={() => {
-            setError(null)
-            setCreatingIn(path)
-          }}
+          onClick={() => setCreatingIn(path)}
           className="flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-sm font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100"
         >
           <FolderPlus className="size-4" /> New folder
@@ -327,7 +318,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
           </span>
         ))}
       </div>
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {listError && <p className="mt-2 text-sm text-red-600">{listError}</p>}
       <Card className="mt-3 divide-y divide-stone-100">
         {!files ? (
           <div className="py-6">
@@ -353,11 +344,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
                 </button>
                 <button
                   disabled={locked}
-                  onClick={() => {
-                    setError(null)
-                    setRenameTo(f.name)
-                    setRenaming({ ...f, path: full })
-                  }}
+                  onClick={() => setRenaming({ ...f, path: full })}
                   className="grid size-9 place-items-center rounded-full text-stone-400 active:bg-stone-100"
                   aria-label={`Rename ${f.name}`}
                 >
@@ -365,10 +352,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
                 </button>
                 <button
                   disabled={locked}
-                  onClick={() => {
-                    setError(null)
-                    setDeleting({ ...f, path: full })
-                  }}
+                  onClick={() => setDeleting({ ...f, path: full })}
                   className="-mr-2 grid size-9 place-items-center rounded-full text-stone-400 active:bg-stone-100"
                   aria-label={`Delete ${f.name}`}
                 >
@@ -380,73 +364,38 @@ function ReaderFiles({ base, onFoldersChanged }) {
         )}
       </Card>
       {creatingIn !== null && (
-        <ActionSheet title="New folder" inputLabel="Folder name" actionLabel="Create folder" pendingLabel="Creating…" onClose={() => setCreatingIn(null)} onConfirm={async (name) => {
-          setBusy(true)
-          try {
-            await makeFolder(base, creatingIn, name)
-            setTick((t) => t + 1)
-            onFoldersChanged()
-          } finally {
-            setBusy(false)
-          }
-        }} />
+        <ActionSheet
+          title="New folder"
+          inputLabel="Folder name"
+          actionLabel="Create folder"
+          pendingLabel="Creating…"
+          onClose={() => setCreatingIn(null)}
+          onConfirm={(name) => run(() => makeFolder(base, creatingIn, name), true)}
+        />
       )}
       {renaming && (
-        <Sheet title={`Rename ${renaming.name}`} onClose={() => { if (!busy) setRenaming(null) }}>
-          <form onSubmit={async (e) => {
-            e.preventDefault()
-            const name = renameTo.trim()
-            if (busy || !name || name === renaming.name) return
-            const renamed = await run(() => renameFile(base, renaming.path, name), renaming.isDirectory)
-            if (renamed) setRenaming(null)
-          }}>
-            <label className="mt-3 block text-sm font-medium text-stone-600">
-              New name
-              <input
-                autoFocus
-                value={renameTo}
-                onChange={(e) => setRenameTo(e.target.value)}
-                disabled={busy}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck={false}
-                className="mt-2 h-12 w-full rounded-xl bg-surface px-3 text-base text-stone-900 ring-1 ring-stone-950/10 outline-none focus:ring-2 focus:ring-brand-500/60 disabled:opacity-60"
-              />
-            </label>
-            {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
-            <div className="mt-5 grid gap-2">
-              <button type="submit" disabled={busy || !renameTo.trim() || renameTo.trim() === renaming.name} className="h-12 rounded-xl bg-brand-500 text-base font-semibold text-white active:bg-brand-600 disabled:opacity-60">
-                {busy ? 'Renaming…' : 'Rename'}
-              </button>
-              <button type="button" disabled={busy} onClick={() => setRenaming(null)} className="h-12 rounded-xl bg-surface text-base font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100 disabled:opacity-60">
-                Cancel
-              </button>
-            </div>
-          </form>
-        </Sheet>
+        <ActionSheet
+          title={`Rename ${renaming.name}`}
+          inputLabel="New name"
+          initialValue={renaming.name}
+          isValid={(value) => value !== renaming.name}
+          actionLabel="Rename"
+          pendingLabel="Renaming…"
+          onClose={() => setRenaming(null)}
+          onConfirm={(name) => run(() => renameFile(base, renaming.path, name), renaming.isDirectory)}
+        />
       )}
       {deleting && (
-        <Sheet title={`Delete ${deleting.name}?`} onClose={() => { if (!busy) setDeleting(null) }}>
-          <p className="mt-3 text-sm/6 text-stone-600">
-            {deleting.isDirectory ? 'Delete this folder from your reader? The folder must be empty.' : 'Delete this file from your reader?'}
-          </p>
-          {error && <p role="alert" className="mt-3 text-sm text-red-600">{error}</p>}
-          <div className="mt-5 grid gap-2">
-            <button
-              disabled={busy}
-              onClick={async () => {
-                const removed = await run(() => deleteFiles(base, [deleting.path]), deleting.isDirectory)
-                if (removed) setDeleting(null)
-              }}
-              className="h-12 rounded-xl bg-red-600 text-base font-semibold text-white active:bg-red-700 disabled:opacity-60"
-            >
-              {busy ? 'Deleting…' : 'Delete'}
-            </button>
-            <button disabled={busy} onClick={() => setDeleting(null)} className="h-12 rounded-xl bg-surface text-base font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100 disabled:opacity-60">
-              Cancel
-            </button>
-          </div>
-        </Sheet>
+        <ActionSheet
+          title={`Delete ${deleting.name}?`}
+          actionLabel="Delete"
+          pendingLabel="Deleting…"
+          danger
+          onClose={() => setDeleting(null)}
+          onConfirm={() => run(() => deleteFiles(base, [deleting.path]), deleting.isDirectory)}
+        >
+          {deleting.isDirectory ? 'Delete this folder from your reader? The folder must be empty.' : 'Delete this file from your reader?'}
+        </ActionSheet>
       )}
     </section>
   )

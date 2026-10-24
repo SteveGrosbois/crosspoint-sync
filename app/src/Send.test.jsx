@@ -272,3 +272,36 @@ it.each(['Delete first.epub', 'Rename first.epub', 'New folder'])('locks reader 
     expect(deleteFiles).toHaveBeenCalledExactlyOnceWith('http://192.0.2.1', ['/first.epub'])
   }
 })
+
+it.each(['Rename', 'Delete'])('keeps %s failures inside the dialog and clears them on cancellation', async (action) => {
+  const operation = action === 'Rename' ? renameFile : deleteFiles
+  operation.mockRejectedValueOnce(new Error(`${action} failed`))
+  render(<Send />)
+  fireEvent.click(await screen.findByRole('button', { name: `${action} book.epub` }))
+  const dialog = screen.getByRole('dialog')
+  if (action === 'Rename') fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'renamed.epub' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: action, exact: true }))
+  expect((await within(dialog).findByRole('alert')).textContent).toBe(`${action} failed`)
+  expect(screen.getAllByText(`${action} failed`)).toHaveLength(1)
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+  expect(screen.queryByText(`${action} failed`)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: `${action} book.epub` }))
+  expect(within(screen.getByRole('dialog')).queryByRole('alert')).toBeNull()
+  expect(operation).toHaveBeenCalledTimes(1)
+})
+
+it.each(['Rename', 'Delete'])('keeps a post-%s listing failure separate from the successful operation', async (action) => {
+  render(<Send />)
+  fireEvent.click(await screen.findByRole('button', { name: `${action} book.epub` }))
+  const dialog = screen.getByRole('dialog')
+  if (action === 'Rename') fireEvent.change(within(dialog).getByRole('textbox'), { target: { value: 'renamed.epub' } })
+  listFiles.mockRejectedValueOnce(new Error('Could not refresh file list'))
+  fireEvent.click(within(dialog).getByRole('button', { name: action, exact: true }))
+  await screen.findByText('Could not refresh file list')
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(action === 'Rename' ? renameFile : deleteFiles).toHaveBeenCalledTimes(1)
+  // A new operation must not inherit or clear an unrelated listing error.
+  fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+  expect(within(screen.getByRole('dialog')).queryByRole('alert')).toBeNull()
+  expect(screen.getByText('Could not refresh file list')).toBeTruthy()
+})
