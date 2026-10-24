@@ -10,11 +10,11 @@ vi.mock('./tabbar.js', () => ({ useSheet() {} }))
 vi.mock('./catalogs.js', () => ({ downloads: vi.fn(async () => []), removeDownload: vi.fn(), sendDownload: vi.fn(), sendFile: vi.fn() }))
 vi.mock('./device.js', async (original) => ({
   ...await original(),
-  connect: vi.fn(), folders: vi.fn(), listFiles: vi.fn(), deleteFiles: vi.fn(), renameFile: vi.fn(),
+  connect: vi.fn(), folders: vi.fn(), listFiles: vi.fn(), deleteFiles: vi.fn(), renameFile: vi.fn(), makeFolder: vi.fn(),
   loadDevicePrefs: () => ({ host: 'reader.local', folder: '/', optimize: false, quality: 85 }),
 }))
 import Send from './Send.jsx'
-import { connect, folders, listFiles, deleteFiles, renameFile } from './device.js'
+import { connect, folders, listFiles, deleteFiles, renameFile, makeFolder } from './device.js'
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -23,6 +23,7 @@ beforeEach(() => {
   listFiles.mockResolvedValue([{ name: 'book.epub', isDirectory: false, size: 1024 }])
   deleteFiles.mockResolvedValue(undefined)
   renameFile.mockResolvedValue(undefined)
+  makeFolder.mockResolvedValue(undefined)
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
@@ -188,4 +189,50 @@ it('keeps a failed deletion visible with the server error and allows retry', asy
   expect(folders).toHaveBeenCalledTimes(2)
   expect(screen.queryByRole('option', { name: '/Books' })).toBeNull()
   expect(screen.queryByRole('dialog')).toBeNull()
+})
+
+it('creates a Unicode folder in the selected directory and refreshes files and folders', async () => {
+  const nativePrompt = vi.spyOn(window, 'prompt').mockReturnValue(null)
+  listFiles.mockImplementation(async (_, path) => path === '/' ? [{ name: 'Books', isDirectory: true }] : [])
+  makeFolder.mockRejectedValueOnce(new Error('Create failed'))
+  render(<Send />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Books', exact: true }))
+  await screen.findByText('This folder is empty')
+  fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+  const dialog = screen.getByRole('dialog', { name: 'New folder' })
+  const input = within(dialog).getByRole('textbox', { name: 'Folder name' })
+  const submit = within(dialog).getByRole('button', { name: 'Create folder' })
+  expect(submit.disabled).toBe(true)
+  fireEvent.change(input, { target: { value: '  여름 & notes  ' } })
+  expect(makeFolder).not.toHaveBeenCalled()
+  fireEvent.click(submit)
+  expect((await within(dialog).findByRole('alert')).textContent).toBe('Create failed')
+  expect(input.value).toBe('  여름 & notes  ')
+  expect(folders).toHaveBeenCalledTimes(1)
+  listFiles.mockResolvedValue([{ name: '여름 & notes', isDirectory: true }])
+  folders.mockResolvedValue(['Books', 'New top-level folder'])
+  fireEvent.click(submit)
+  await screen.findByRole('button', { name: '여름 & notes', exact: true })
+  expect(makeFolder).toHaveBeenNthCalledWith(1, 'http://192.0.2.1', '/Books', '여름 & notes')
+  expect(makeFolder).toHaveBeenNthCalledWith(2, 'http://192.0.2.1', '/Books', '여름 & notes')
+  expect(folders).toHaveBeenCalledTimes(2)
+  expect(screen.getByRole('option', { name: '/New top-level folder' })).toBeTruthy()
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(nativePrompt).not.toHaveBeenCalled()
+})
+
+it('does not create a folder for blank input or when cancelled or closed', async () => {
+  render(<Send />)
+  await screen.findByRole('button', { name: 'New folder' })
+  for (const dismiss of ['Cancel', 'Close']) {
+    fireEvent.click(screen.getByRole('button', { name: 'New folder' }))
+    const dialog = screen.getByRole('dialog')
+    const input = within(dialog).getByRole('textbox')
+    fireEvent.change(input, { target: { value: '  ' } })
+    fireEvent.submit(input.closest('form'))
+    fireEvent.change(input, { target: { value: 'Uncreated folder' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: dismiss }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  }
+  expect(makeFolder).not.toHaveBeenCalled()
 })

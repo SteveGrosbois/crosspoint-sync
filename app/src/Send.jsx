@@ -22,7 +22,7 @@ import {
 import { isApp } from './api.js'
 import { DEFAULT_HOST, EXTENSIONS, connect, deleteFiles, folders, isBook, joinPath, listFiles, loadDevicePrefs, makeFolder, renameFile, saveDevicePrefs } from './device.js'
 import { downloads as listDownloads, removeDownload, sendDownload, sendFile } from './catalogs.js'
-import { Card, EmptyState, folderLabel, notify, Sheet, Toggle } from './ui.jsx'
+import { ActionSheet, Card, EmptyState, folderLabel, notify, Sheet, Toggle } from './ui.jsx'
 
 const size = (n) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`)
 // Android's picker filters by MIME type and has none for .md, so let it show everything there.
@@ -256,6 +256,7 @@ function ReaderFiles({ base, onFoldersChanged }) {
   const [deleting, setDeleting] = useState(null)
   const [renaming, setRenaming] = useState(null)
   const [renameTo, setRenameTo] = useState('')
+  const [creatingIn, setCreatingIn] = useState(null)
   useEffect(() => {
     let live = true
     setFiles(null)
@@ -293,8 +294,8 @@ function ReaderFiles({ base, onFoldersChanged }) {
         <button
           disabled={busy}
           onClick={() => {
-            const name = prompt('New folder name')?.trim()
-            if (name) run(() => makeFolder(base, path, name), true)
+            setError(null)
+            setCreatingIn(path)
           }}
           className="flex h-9 items-center gap-1.5 rounded-full bg-surface px-3 text-sm font-semibold text-stone-700 ring-1 ring-stone-950/10 active:bg-stone-100"
         >
@@ -366,6 +367,18 @@ function ReaderFiles({ base, onFoldersChanged }) {
           })
         )}
       </Card>
+      {creatingIn !== null && (
+        <ActionSheet title="New folder" inputLabel="Folder name" actionLabel="Create folder" pendingLabel="Creating…" onClose={() => setCreatingIn(null)} onConfirm={async (name) => {
+          setBusy(true)
+          try {
+            await makeFolder(base, creatingIn, name)
+            setTick((t) => t + 1)
+            onFoldersChanged()
+          } finally {
+            setBusy(false)
+          }
+        }} />
+      )}
       {renaming && (
         <Sheet title={`Rename ${renaming.name}`} onClose={() => { if (!busy) setRenaming(null) }}>
           <form onSubmit={async (e) => {
